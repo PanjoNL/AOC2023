@@ -1,0 +1,49 @@
+unit uAOCTimer;
+
+interface
+
+type
+  TTimerType = (MicroSeconds, MilliSeconds);
+
+  AOCTimer = record
+  private
+    FStart: Int64;
+  public
+    class function Start: AOCTimer; static;
+
+    function ElapsedTime(aTimerType: TTimerType = MicroSeconds): integer;
+    procedure Reset;
+end;
+
+const
+  TimeDivider: Array[TTimerType] of int64 = (1000000, 1000);
+  TimeIndicator: Array[TTimerType] of string = ('µs', 'ms');
+
+implementation
+
+uses
+  Winapi.Windows;
+
+{ AOCTimer }
+
+procedure AOCTimer.Reset;
+begin
+  QueryPerformanceCounter(FStart);
+end;
+
+class function AOCTimer.Start: AOCTimer;
+begin
+  Result.Reset;
+end;
+
+function AOCTimer.ElapsedTime(aTimerType: TTimerType): Integer;
+Var
+  Stop, Freq, Units: int64;
+begin
+  QueryPerformanceCounter(Stop);
+  QueryPerformanceFrequency(Freq);
+  units := Freq div TimeDivider[aTimerType];
+  Result := (Stop - FStart) div Units
+end;
+
+end.
