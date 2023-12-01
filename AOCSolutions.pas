@@ -16,10 +16,8 @@ type
 
   TAdventOfCodeDay1 = class(TAdventOfCode)
   private
-    CaloriesPerElf: TList<integer>;
+    function CalculateCalibrationSum(CheckLetters: Boolean): integer;
   protected
-    procedure BeforeSolve; override;
-    procedure AfterSolve; override;
     function SolveA: Variant; override;
     function SolveB: Variant; override;
   end;
@@ -43,45 +41,55 @@ type
 implementation
 
 {$REGION 'TAdventOfCodeDay1'}
-procedure TAdventOfCodeDay1.BeforeSolve;
+function TAdventOfCodeDay1.CalculateCalibrationSum(CheckLetters: Boolean): integer;
+const
+  Numbers: array[1..9] of string = ('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine');
 var
-  i, TotalCalories, Calories: integer;
+  s: string;
+  i, j: integer;
+  num1, num2, num: Integer;
 begin
-  inherited;
+  Result := 0;
 
-  CaloriesPerElf := TList<integer>.Create;
+  for s in FInput do
+  begin
+    Num1 := -1;
+    num2 := -1;
 
-  TotalCalories := 0;
-  for i := 0 to FInput.Count - 1 do
-  Begin
-    if TryStrToInt(FInput[i], Calories) then
-      inc(TotalCalories, Calories)
-    else
+    for j := 1 to Length(s) do
     begin
-      CaloriesPerElf.Add(TotalCalories);
-      TotalCalories := 0;
+      if not TryStrToInt(s[j], num) and CheckLetters then
+      begin
+        for i := 1 to 9 do
+        begin
+          if pos(numbers[i], s, j) = j then
+          begin
+            num := i;
+            Break;
+          end;
+        end;
+      end;
+
+      if num > 0 then
+      begin
+        if num1 <= 0 then
+          num1 := num;
+        num2 := num;
+      end;
     end;
-  End;
 
-  CaloriesPerElf.Add(TotalCalories);
-  CaloriesPerElf.Sort;
-  CaloriesPerElf.Reverse;
-end;
-
-procedure TAdventOfCodeDay1.AfterSolve;
-begin
-  inherited;
-  CaloriesPerElf.Free;
+    Result := Result + Num1*10 + num2;
+  end;
 end;
 
 function TAdventOfCodeDay1.SolveA: Variant;
 begin
-  Result := CaloriesPerElf.First;
+  Result := CalculateCalibrationSum(False);
 end;
 
 function TAdventOfCodeDay1.SolveB: Variant;
 begin
-  Result := CaloriesPerElf[0] + CaloriesPerElf[1] + CaloriesPerElf[2];
+  Result := CalculateCalibrationSum(True);
 end;
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
@@ -100,9 +108,13 @@ end;
 function TAdventOfCodeDay.SolveA: Variant;
 var
   s: String;
+  split: TStringDynArray;
 begin
   for s in FInput do
+  begin
+    split := SplitString(s, ',');
     Writeln(s);
+  end;
 end;
 
 function TAdventOfCodeDay.SolveB: Variant;
