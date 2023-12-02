@@ -22,6 +22,15 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay2 = class(TAdventOfCode)
+  private
+    ResultA, ResultB: Integer;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -92,6 +101,52 @@ begin
   Result := CalculateCalibrationSum(True);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay2'}
+procedure TAdventOfCodeDay2.BeforeSolve;
+  var
+  MaxCubes: Array[0..2] of integer;
+  s: String;
+  Split: TStringDynArray;
+  GameId, Cubes, Idx, ColorIdx: integer;
+begin
+  ResultA := 0;
+  ResultB := 0;
+
+  for s in FInput do
+  begin
+    Split := SplitString(s.Replace(',', '').Replace(':','').Replace(';',''), ' ');
+
+    GameId := StrToInt(Split[1]);
+    idx := 2;
+    MaxCubes[0] := 0;
+    MaxCubes[1] := 0;
+    MaxCubes[2] := 0;
+
+    while idx < Length(Split) do
+    begin
+      Cubes := StrToInt(Split[idx]);
+      ColorIdx := IndexStr(Split[idx+1], ['red', 'green', 'blue']);
+      MaxCubes[ColorIdx] := Max(MaxCubes[ColorIdx], Cubes);
+      Inc(Idx, 2);
+    end;
+
+    if (MaxCubes[0] <= 12) and (MaxCubes[1] <= 13) and (MaxCubes[2] <= 14) then
+      Inc(ResultA, GameId);
+
+    Inc(ResultB, MaxCubes[0] * MaxCubes[1] * MaxCubes[2]);
+  end;
+end;
+
+function TAdventOfCodeDay2.SolveA: Variant;
+begin
+  Result := ResultA;
+end;
+
+function TAdventOfCodeDay2.SolveB: Variant;
+begin
+  Result := ResultB;
+end;
+{$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -126,6 +181,6 @@ end;
 initialization
 
 RegisterClasses([
-  TAdventOfCodeDay1]);
+  TAdventOfCodeDay1, TAdventOfCodeDay2]);
 
 end.
