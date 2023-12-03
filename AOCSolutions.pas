@@ -31,6 +31,23 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay3 = class(TAdventOfCode)
+  private
+    type
+      TSymbolGrid = array of array of string;
+    var
+      Symbols: TList<TPoint>;
+      Grid: TSymbolGrid;
+      MaxX, MaxY: Integer;
+
+    procedure GetNumbersForPoint(var aGrid: TSymbolGrid; ResultList: TList<Integer>; aPoint: TPoint; ClearNumbers: Boolean);
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -147,6 +164,161 @@ begin
   Result := ResultB;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay3'}
+procedure TAdventOfCodeDay3.BeforeSolve;
+var
+  x, y, i: integer;
+  c: char;
+begin
+  Symbols := TList<TPoint>.Create;
+
+  MaxX := Length(FInput[0]);
+  MaxY := FInput.Count;
+
+  SetLength(Grid, MaxX);
+  for x := 0 to MaxX-1 do
+  begin
+    SetLength(Grid[x], MaxY);
+    for y := 0 to MaxY-1 do
+    begin
+      c := FInput[y][x+1];
+
+      if c = '.' then
+        Continue;
+
+      Grid[x][y] := c;
+
+      if not TryStrToInt(c, i) then
+        Symbols.Add(TPoint.Create(x, y))
+    end;
+  end;
+end;
+
+procedure TAdventOfCodeDay3.AfterSolve;
+begin
+  Symbols.Free;
+end;
+
+procedure TAdventOfCodeDay3.GetNumbersForPoint(var aGrid: TSymbolGrid; ResultList: TList<Integer>; aPoint: TPoint; ClearNumbers: Boolean);
+
+  function _InternalGetNumber(aX, aY: integer): Boolean;
+  var
+    TotalNum, CurrX: Integer;
+  begin
+    Result := False;
+
+    if not InRange(aX, 0, MaxX) or not InRange(aY, 0, MaxY) then
+      Exit(False); // Out of range
+
+    if not IsNumber(aGrid[aX][aY]) then
+      Exit; // Empty or a symbol;
+
+    CurrX := aX;
+    while True do // Move to start;
+    begin
+      if CurrX - 1 < 0 then
+        Break; // At the edge
+
+      if not IsNumber(aGrid[CurrX-1][aY]) then
+        Break; // Char to te left is nan;
+
+      Dec(CurrX);
+    end;
+
+    TotalNum := 0;
+    while True do // Read number
+    begin
+      if CurrX >= MaxX then
+        Break; // At the edge
+
+      if not IsNumber(aGrid[CurrX][aY]) then
+        Break; // Done reading
+
+      TotalNum := 10 * TotalNum + StrToInt(aGrid[CurrX][aY]);
+      if ClearNumbers then
+        aGrid[CurrX][aY] := '';
+      inc(CurrX);
+    end;
+
+    Result := True;
+    ResultList.Add(TotalNum);
+  end;
+
+begin
+  ResultList.Clear;
+
+  // Left of Point;
+  _InternalGetNumber(aPoint.X-1, aPoint.Y);
+
+  // Right of Point;
+  _InternalGetNumber(aPoint.X+1, aPoint.Y);
+
+  // Above Point;
+  if not _InternalGetNumber(aPoint.X, aPoint.Y+1) then
+  begin
+    _InternalGetNumber(aPoint.X-1, aPoint.Y+1); // Left top
+    _InternalGetNumber(aPoint.X+1, aPoint.Y+1); // Right top
+  end;
+
+  // Below Point;
+  if not _InternalGetNumber(aPoint.X, aPoint.Y-1) then
+  begin
+    _InternalGetNumber(aPoint.X-1, aPoint.Y-1); // Left bottom
+    _InternalGetNumber(aPoint.X+1, aPoint.Y-1); // Right bottom
+  end;
+end;
+
+function TAdventOfCodeDay3.SolveA: Variant;
+var
+  LocalGrid: TSymbolGrid;
+  CurrentPoint: TPoint;
+  X, Y, I: Integer;
+  ResultList: TList<Integer>;
+begin
+  Result := 0;
+
+  SetLength(LocalGrid, MaxX);
+  for x := 0 to MaxX - 1 do
+  begin
+    SetLength(LocalGrid[X], MaxY);
+    for y := 0 to MaxY - 1 do
+      LocalGrid[X][Y] := Grid[X][Y]
+  end;
+
+  ResultList := TList<Integer>.Create;
+
+  for CurrentPoint in Symbols do
+  begin
+    GetNumbersForPoint(LocalGrid, ResultList, CurrentPoint, True);
+    for I in ResultList do
+      Inc(Result, I);
+  end;
+
+  ResultList.Free;
+end;
+
+function TAdventOfCodeDay3.SolveB: Variant;
+var
+  LocalGrid: TSymbolGrid;
+  CurrentPoint: TPoint;
+  ResultList: TList<Integer>;
+begin
+  Result := 0;
+  ResultList := TList<Integer>.Create;
+
+  for CurrentPoint in Symbols do
+  begin
+    if Grid[CurrentPoint.X][CurrentPoint.Y] <> '*' then
+      Continue;
+
+    GetNumbersForPoint(Grid, ResultList, CurrentPoint, False);
+    if ResultList.Count = 2 then
+      Inc(Result, ResultList[0] * ResultList[1]);
+  end;
+
+  ResultList.Free;
+end;
+{$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -181,6 +353,6 @@ end;
 initialization
 
 RegisterClasses([
-  TAdventOfCodeDay1, TAdventOfCodeDay2]);
+  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3]);
 
 end.

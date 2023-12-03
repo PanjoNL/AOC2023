@@ -55,6 +55,7 @@ function BitStringToInt(Const aBit: string): int64;
 function CountTrueBits(aInt: integer): integer;
 function InRange(const aTarget, aLeft, aRight: int64): boolean;
 function RotateDirection(aDirection: TDirection; aAmmount: integer): TDirection;
+function IsNumber(aNumber: string): Boolean;
 
 Const
   MaxInt64: Int64 = 9223372036854775807;
@@ -336,6 +337,13 @@ end;
 function RotateDirection(aDirection: TDirection; aAmmount: integer): TDirection;
 begin
   Result := TDirection((aAmmount + Ord(aDirection)) mod 4);
+end;
+
+function IsNumber(aNumber: string): Boolean;
+var
+  Dummy: Integer;
+begin
+  Result := TryStrToInt(aNumber, Dummy);
 end;
 
 
