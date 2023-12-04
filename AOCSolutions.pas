@@ -328,43 +328,30 @@ end;
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay4'}
 procedure TAdventOfCodeDay4.BeforeSolve;
+
+  function GetCards(aInput: string): SetOfByte;
+  var
+    s: String;
+    i: Integer;
+  begin
+    Result := [];
+
+    for s in SplitString(aInput, ' ') do
+      if TryStrToInt(s, i) then
+        Include(Result, i);
+  end;
+
 var
-  s: String;
   split: TStringDynArray;
-  i, CardIndex, num: integer;
-  ReadingMyNumbers: Boolean;
   match: Byte;
-  WinningNumbers, MyNumbers: SetOfByte;
 begin
   SetLength(WinningCount, FInput.Count);
 
   for CardIndex := 0 to FInput.Count -1 do
   begin
-    split := SplitString(FInput[CardIndex], ' ');
-    ReadingMyNumbers := False;
-    WinningNumbers := [];
-    MyNumbers := [];
+    split := SplitString(FInput[CardIndex], ':|');
 
-    for i := 2 to Length(split)-1 do
-    begin
-      s := split[i];
-
-      if s = '|' then
-      begin
-        ReadingMyNumbers := True;
-        Continue;
-      end;
-
-      if TryStrToInt(s, num) then
-      begin
-        if ReadingMyNumbers then
-          Include(MyNumbers, num)
-        else
-          Include(WinningNumbers, num)
-      end;
-    end;
-
-    for match in MyNumbers * WinningNumbers do
+    for match in GetCards(Split[1]) * GetCards(Split[2]) do
       WinningCount[CardIndex] := WinningCount[CardIndex] + 1;
   end;
 end;
@@ -374,7 +361,7 @@ var
   i: integer;
 begin
   Result := 0;
-  for i := 0 to Length(WinningCount) do
+  for i := 0 to Length(WinningCount) -1 do
     if WinningCount[i] > 0 then
       Inc(Result, 1 shl (WinningCount[i]-1));
 end;
