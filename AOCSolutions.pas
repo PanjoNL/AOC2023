@@ -48,6 +48,14 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay4 = class(TAdventOfCode)
+  private
+    WinningCount: Array of integer;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -299,7 +307,6 @@ end;
 
 function TAdventOfCodeDay3.SolveB: Variant;
 var
-  LocalGrid: TSymbolGrid;
   CurrentPoint: TPoint;
   ResultList: TList<Integer>;
 begin
@@ -317,6 +324,77 @@ begin
   end;
 
   ResultList.Free;
+end;
+{$ENDREGION}
+{$REGION 'TAdventOfCodeDay4'}
+procedure TAdventOfCodeDay4.BeforeSolve;
+var
+  s: String;
+  split: TStringDynArray;
+  i, CardIndex, num: integer;
+  ReadingMyNumbers: Boolean;
+  match: Byte;
+  WinningNumbers, MyNumbers: SetOfByte;
+begin
+  SetLength(WinningCount, FInput.Count);
+
+  for CardIndex := 0 to FInput.Count -1 do
+  begin
+    split := SplitString(FInput[CardIndex], ' ');
+    ReadingMyNumbers := False;
+    WinningNumbers := [];
+    MyNumbers := [];
+
+    for i := 2 to Length(split)-1 do
+    begin
+      s := split[i];
+
+      if s = '|' then
+      begin
+        ReadingMyNumbers := True;
+        Continue;
+      end;
+
+      if TryStrToInt(s, num) then
+      begin
+        if ReadingMyNumbers then
+          Include(MyNumbers, num)
+        else
+          Include(WinningNumbers, num)
+      end;
+    end;
+
+    for match in MyNumbers * WinningNumbers do
+      WinningCount[CardIndex] := WinningCount[CardIndex] + 1;
+  end;
+end;
+
+function TAdventOfCodeDay4.SolveA: Variant;
+var
+  i: integer;
+begin
+  Result := 0;
+  for i := 0 to Length(WinningCount) do
+    if WinningCount[i] > 0 then
+      Inc(Result, 1 shl (WinningCount[i]-1));
+end;
+
+function TAdventOfCodeDay4.SolveB: Variant;
+var
+  WinningIndex, idx: integer;
+  Cards: Array of integer;
+begin
+  SetLength(Cards, Length(WinningCount));
+  for idx := 0 to Length(WinningCount)-1 do
+    Cards[idx] := 1;
+
+  Result := 0;
+  for WinningIndex := 0 to Length(WinningCount)-1 do
+  begin
+    for Idx := 1 to WinningCount[WinningIndex] do
+      Cards[WinningIndex + Idx] := Cards[WinningIndex + Idx] + Cards[WinningIndex];
+        Inc(Result, Cards[WinningIndex]);
+  end;
 end;
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
@@ -353,6 +431,6 @@ end;
 initialization
 
 RegisterClasses([
-  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3]);
+  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4]);
 
 end.
