@@ -57,6 +57,20 @@ type
     function SolveB: Variant; override;
   end;
 
+  SeedRange = Record
+  public
+    RangeStart, RangeStop: Int64;
+    class function Create(const aRangeStart, aRangeStop: Int64): SeedRange; static;
+  End;
+
+  TAdventOfCodeDay5 = class(TAdventOfCode)
+  private
+    function PlantSeeds(Seeds: TList<SeedRange>): Int64;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
 
@@ -344,6 +358,7 @@ procedure TAdventOfCodeDay4.BeforeSolve;
 var
   split: TStringDynArray;
   match: Byte;
+  CardIndex: integer;
 begin
   SetLength(WinningCount, FInput.Count);
 
@@ -384,6 +399,214 @@ begin
   end;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay5'}
+class function SeedRange.Create(const aRangeStart, aRangeStop: Int64): SeedRange;
+begin
+  Result.RangeStart := aRangeStart;
+  Result.RangeStop := aRangeStop;
+end;
+
+function TAdventOfCodeDay5.PlantSeeds(Seeds: TList<SeedRange>): Int64;
+var
+  split: TStringDynArray;
+  i, idx, SeedIdx: Integer;
+  NewSeeds: TList<SeedRange>;
+  Seed: SeedRange;
+  Dest_Start, Dest_Stop, Source_Start, RangeLength, Source_Stop, LocalOffSet, Seed_Start, Seed_Stop: Int64;
+  StartInRange, StopInRange, FullOverlap: Boolean;
+begin
+  NewSeeds := TList<SeedRange>.Create;
+
+  idx := 3;
+  while idx < FInput.Count -1 do
+  begin
+    if FInput[idx] = '' then
+    begin
+      inc(idx, 2);
+
+      for Seed in Seeds do
+        NewSeeds.Add(Seed);
+
+      Seeds.Free;
+      Seeds := NewSeeds;
+      NewSeeds := TList<SeedRange>.Create;
+    end;
+
+    split := SplitString(FInput[Idx], ' ');
+    Dest_Start := Split[0].ToInt64;
+    Source_Start := Split[1].ToInt64;
+    RangeLength := Split[2].ToInt64;
+
+    Source_Stop := Source_Start + RangeLength;
+    Dest_Stop := Dest_Start + RangeLength;
+
+    for SeedIdx := Seeds.Count-1 downto 0 do
+    begin
+      Seed := Seeds.ExtractAt(SeedIdx);
+
+      Seed_Start := Seed.RangeStart;
+      Seed_Stop := Seed.RangeStop;
+
+      StartInRange := InRange(Seed_Start, Source_Start, Source_Stop);
+      StopInRange  := InRange(Seed_Stop, Source_Start, Source_Stop);
+
+      if StartInRange and StopInRange then
+      begin
+        LocalOffSet := Seed_Start - Source_Start;
+        NewSeeds.Add(SeedRange.Create(Dest_Start + LocalOffSet, Dest_Start + LocalOffSet + Seed_Stop - Seed_Start));
+      end
+      else if StartInRange then
+      begin
+        NewSeeds.Add(SeedRange.Create(Dest_Start + Seed_Start - Source_Start, Dest_Stop ));
+        Seeds.Add(SeedRange.Create(Source_Stop + 1, Seed_Stop ))
+      end
+      else if StopInRange  then
+      begin
+        NewSeeds.Add(SeedRange.Create(Dest_Start, Dest_Start + Seed_Stop - Source_Start));
+        Seeds.Add(SeedRange.Create(Seed_Start, Source_Start-1));
+      end
+      else if (Seed_Start <= Source_Start) and (Seed_Stop >= Source_Stop) then
+      begin
+        NewSeeds.Add(SeedRange.Create(Dest_Start, Dest_Stop));
+
+        Seeds.Add(SeedRange.Create(Seed_Start, Source_Start-1));
+        Seeds.Add(SeedRange.Create(Source_Stop + 1, Seed_Stop));
+      end
+      else
+        Seeds.Add(Seed);
+    end;
+
+    Inc(idx);
+  end;
+
+  Result := MaxInt64;
+  for Seed in nEWSeeds do
+    Result := Min(Result, Seed.RangeStart);
+  for Seed in Seeds do
+    Result := Min(Result, Seed.RangeStart);
+  Seeds.Free;
+  NewSeeds.Free;
+end;
+
+//function TAdventOfCodeDay5.PlantSeeds(Seeds: TList<SeedRange>): Int64;
+//var
+//  s: String;
+//  split: TStringDynArray;
+//  i, idx, SeedIdx: int64;
+//  NewSeeds: TList<SeedRange>;
+//  Seed: SeedRange;
+//  Dest_Start, Dest_Stop, Source_Start, RangeLength, Source_Stop, LocalOffSet: int64;
+//  StartInRange, StopInRange, FullOverlap: Boolean;
+//
+//  Seed_Start, Seed_Stop: int64 ;
+//begin
+//  NewSeeds := TList<SeedRange>.Create;
+//
+//  idx := 3;
+//  while idx < FInput.Count -1 do
+//  begin
+//    if FInput[idx] = '' then
+//    begin
+//      inc(idx, 2);
+//
+//      for Seed in Seeds do
+//        NewSeeds.Add(Seed);
+//
+//      Seeds.Free;
+//      Seeds := NewSeeds;
+//      NewSeeds := TList<SeedRange>.Create;
+//    end;
+//
+//    split := SplitString(FInput[Idx], ' ');
+//    Dest_Start := Split[0].ToInt64;
+//    Source_Start := Split[1].ToInt64;
+//    RangeLength := Split[2].ToInt64;
+//
+//    Source_Stop := Source_Start + RangeLength;
+//    Dest_Stop := Dest_Start + RangeLength;
+//
+//    for SeedIdx := Seeds.Count-1 downto 0 do
+//    begin
+//      Seed := Seeds.ExtractAt(SeedIdx);
+//
+//      Seed_Start := Seed.RangeStart;
+//      Seed_Stop := Seed.RangeStop;
+//
+//      StartInRange := InRange(Seed_Start, Source_Start, Source_Stop);
+//      StopInRange  := InRange(Seed_Stop, Source_Start, Source_Stop);
+//
+//      if StartInRange and StopInRange then
+//      begin
+//        LocalOffSet := Seed_Start - Source_Start;
+//        NewSeeds.Add(SeedRange.Create(Dest_Start + LocalOffSet, Dest_Start + LocalOffSet + Seed_Stop - Seed_Start));
+//        Continue;
+//      end;
+//
+//      if StartInRange then
+//      begin
+//        NewSeeds.Add(SeedRange.Create(Dest_Start + Seed_Start - Source_Start, Dest_Stop ));
+//        Seeds.Add(SeedRange.Create(Source_Stop + 1, Seed_Stop ))
+//      end
+//      else if StopInRange  then
+//      begin
+//        NewSeeds.Add(SeedRange.Create(Dest_Start, Dest_Start + Seed_Stop - Source_Start));
+//        Seeds.Add(SeedRange.Create(Seed_Start, Source_Start-1));
+//      end
+//      else if (Seed_Start <= Source_Start) and (Seed_Stop >= Source_Stop) then
+//      begin
+//        NewSeeds.Add(SeedRange.Create(Dest_Start, Dest_Stop));
+//
+//        Seeds.Add(SeedRange.Create(Seed_Start, Source_Start-1));
+//        Seeds.Add(SeedRange.Create(Source_Stop + 1, Seed_Stop));
+//      end
+//      else
+//        Seeds.Add(Seed);
+//    end;
+//
+//    Inc(idx);
+//  end;
+//
+//  Result := MaxInt64;
+//  for Seed in nEWSeeds do
+//    Result := Min(Result, Seed.RangeStart);
+//  for Seed in Seeds do
+//    Result := Min(Result, Seed.RangeStart);
+//end;
+
+function TAdventOfCodeDay5.SolveA: Variant;
+var
+  s: String;
+  Seeds: TList<SeedRange>;
+begin
+  Seeds := TList<SeedRange>.Create;
+
+  for s in SplitString(FInput[0].Replace('seeds: ', ''), ' ') do
+    Seeds.Add(SeedRange.Create(s.ToInt64, s.ToInt64));
+
+  Result := PlantSeeds(Seeds);
+end;
+
+function TAdventOfCodeDay5.SolveB: Variant;
+var
+  split: TStringDynArray;
+  i: integer;
+  Seeds: TList<SeedRange>;
+begin
+  Seeds := TList<SeedRange>.Create;
+
+  split := SplitString(FInput[0].Replace('seeds: ', ''), ' ');
+  i := 0;
+  while i < Length(split) do
+  begin
+    Seeds.Add(SeedRange.Create(Split[i].ToInt64, Split[i].ToInt64 + Split[i+1].ToInt64));
+    Inc(i, 2);;
+  end;
+
+  Result := PlantSeeds(Seeds);
+end;
+{$ENDREGION}
+
+
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -418,6 +641,6 @@ end;
 initialization
 
 RegisterClasses([
-  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4]);
+  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5]);
 
 end.
