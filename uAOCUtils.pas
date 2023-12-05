@@ -341,9 +341,9 @@ end;
 
 function IsNumber(aNumber: string): Boolean;
 var
-  Dummy: Integer;
+  Dummy: int64;
 begin
-  Result := TryStrToInt(aNumber, Dummy);
+  Result := TryStrToInt64(aNumber, Dummy);
 end;
 
 
