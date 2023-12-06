@@ -56,6 +56,7 @@ function CountTrueBits(aInt: integer): integer;
 function InRange(const aTarget, aLeft, aRight: int64): boolean;
 function RotateDirection(aDirection: TDirection; aAmmount: integer): TDirection;
 function IsNumber(aNumber: string): Boolean;
+function DeleteRepeatedSpaces(const s: string):string;
 
 Const
   MaxInt64: Int64 = 9223372036854775807;
@@ -346,5 +347,18 @@ begin
   Result := TryStrToInt64(aNumber, Dummy);
 end;
 
+function DeleteRepeatedSpaces(const s: string):string;
+var
+  i:integer;
+begin
+  Result := '';
+  for i := 1 to Length(S) do
+  begin
+    if not ((s[i]=' ') and (s[i-1]=' ')) then
+    begin
+      Result := Result + s[i];
+    end;
+  end;
+end;
 
 end.

@@ -81,6 +81,15 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay6 = class(TAdventOfCode)
+  private
+    function RaceBoats(aTime, aDistance: Int64): Int64;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
 
@@ -572,7 +581,46 @@ begin
   Result := PlantSeeds(Seeds);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay6'}
+function TAdventOfCodeDay6.RaceBoats(aTime, aDistance: Int64): Int64;
+var
+  a, b, c, d, r1, r2: Int64;
+begin
+  // https://pages.mtu.edu/~shene/COURSES/cs201/NOTES/chap03/quad-2.html
+  a := -1;
+  b := aTime;
+  c := -aDistance;
+  d := b * b - 4 * a * c;
 
+  r1 := Ceil((-b + sqrt(d))/(2*a));
+  r2 := Trunc((-b - sqrt(d))/(2*a));
+
+  result := r2-r1 + 1;
+end;
+
+function TAdventOfCodeDay6.SolveA: Variant;
+Var
+  SplitTime, SplitDistance: TStringDynArray;
+  i: integer;
+begin
+  SplitTime := SplitString(DeleteRepeatedSpaces(FInput[0]), ' ');
+  SplitDistance := SplitString(DeleteRepeatedSpaces(FInput[1]), ' ');
+
+  Result := 1;
+  for i := 1 to Length(SplitTime)-1 do
+    Result := Result * RaceBoats(SplitTime[i].ToInt64, SplitDistance[i].ToInt64);
+end;
+
+function TAdventOfCodeDay6.SolveB: Variant;
+Var
+  SplitTime, SplitDistance: TStringDynArray;
+begin
+  SplitTime := SplitString((StringReplace(FInput[0], ' ', '', [rfReplaceAll])), ':');
+  SplitDistance := SplitString((StringReplace(FInput[1], ' ', '', [rfReplaceAll])), ':');
+
+  Result := RaceBoats(SplitTime[1].ToInt64, SplitDistance[1].ToInt64);
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -609,6 +657,7 @@ end;
 initialization
 
 RegisterClasses([
-  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5]);
+  TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
+  TAdventOfCodeDay6]);
 
 end.
