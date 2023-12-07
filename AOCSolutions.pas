@@ -632,14 +632,11 @@ function TAdventOfCodeDay7.PlayCamelCards(UseJoker: Boolean): integer;
 
   function ReadHand(const aHand: string): int64;
   const
-    CardStrengths: array[boolean] of array[0..12] of string = (
-      ('A', 'K','Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'),
-      ('A', 'K','Q', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'J')
-    );
+    CardStrengths: array[boolean] of string = ('AKQJT98765432', 'AKQT98765432J');
     JokerStrength: integer = 0;
   var
     Split: TStringDynArray;
-    i, ActiveCards, CardIndex, CardStrength, TypeStrength, LetterStrength, MostLetters, JokerCount: integer;
+    i, ActiveCards, CardIndex, CardStrength, TypeStrength, LetterStrength, MostLetters, JokerCount: int64;
     CardTotals: Array[0..12] of integer;
   begin
     for i := 0 to 12 do
@@ -651,61 +648,51 @@ function TAdventOfCodeDay7.PlayCamelCards(UseJoker: Boolean): integer;
     ActiveCards := 0;
     for CardIndex := 1 to 5  do
     begin
-      CardStrength := 12-IndexStr(Split[0][CardIndex], CardStrengths[UseJoker]);
+      CardStrength := 13-Pos(Split[0][CardIndex], CardStrengths[UseJoker]);
+
       ActiveCards := ActiveCards or 1 shl CardStrength;
       CardTotals[CardStrength] := CardTotals[CardStrength] + 1;
       LetterStrength := (LetterStrength shl 4) + CardStrength;
     end;
 
+    MostLetters := MaxIntValue(CardTotals);
     if UseJoker and (CardTotals[JokerStrength] > 0) and (CountTrueBits(ActiveCards) > 1) then
     begin
       JokerCount := CardTotals[JokerStrength];
       CardTotals[JokerStrength] := 0;
-      ActiveCards := ActiveCards and not (1 shl JokerStrength);
-      MostLetters := MaxIntValue(CardTotals);
-      for i := 0 to 12 do
-        if CardTotals[i] = MostLetters then
-        begin
-          CardTotals[i] := CardTotals[i] + JokerCount;
-          Break;
-        end;
+      ActiveCards := ActiveCards and not 1;
+      MostLetters := MaxIntValue(CardTotals) + JokerCount;
     end;
 
     TypeStrength := 0;
     case CountTrueBits(ActiveCards) of
       1: TypeStrength := 6;// Five of a kind
-      2: TypeStrength := MaxIntValue(CardTotals) + 1; // Four of a kind / Full house
-      3: TypeStrength := MaxIntValue(CardTotals); // Three of a kind / two pair
+      2: TypeStrength := MostLetters + 1; // Four of a kind / Full house
+      3: TypeStrength := MostLetters; // Three of a kind / two pair
       4: TypeStrength := 1; // One pair
       5: TypeStrength := 0; // High Card
     end;
 
-    Result := Split[1].ToInt64 shl 32 +
-              TypeStrength Shl 20 +
-              LetterStrength
+    Result := (TypeStrength shl 52) +
+              (LetterStrength shl 32) +
+              Split[1].ToInt64
   end;
 
 var
   Queue: PriorityQueue<Int64>;
-  Comparer: IComparer<Int64>;
   s: String;
-  Work: Int64;
+  idx: integer;
 begin
-  Comparer := TComparer<Int64>.Construct(
-    function(const Left, Right: Int64): integer
-    begin
-      Result := Sign((Right and MaxInt) - (Left and MaxInt));
-    end);
-
-  Queue := PriorityQueue<Int64>.Create(Comparer, Comparer);
+  Queue := PriorityQueue<Int64>.Create();
   for s in FInput do
     Queue.Enqueue(ReadHand(s));
 
   Result := 0;
+  Idx := 1;
   while Queue.Count > 0 do
   begin
-    Work := Queue.Dequeue;
-    Result := Result + (Queue.Count + 1) * (Work shr 32)
+    Result := Result + Idx * (Queue.Dequeue and maxInt);
+    Inc(Idx)
   end;
 end;
 
