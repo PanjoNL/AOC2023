@@ -89,10 +89,16 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay7 = class(TAdventOfCode)
+  private
+    function PlayCamelCards(UseJoker: Boolean): integer;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
-
   protected
     procedure BeforeSolve; override;
     procedure AfterSolve; override;
@@ -621,7 +627,98 @@ begin
   Result := RaceBoats(SplitTime[1].ToInt64, SplitDistance[1].ToInt64);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay7'}
+function TAdventOfCodeDay7.PlayCamelCards(UseJoker: Boolean): integer;
 
+  function ReadHand(const aHand: string): int64;
+  const
+    CardStrengths: array[boolean] of array[0..12] of string = (
+      ('A', 'K','Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'),
+      ('A', 'K','Q', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'J')
+    );
+    JokerStrength: integer = 0;
+  var
+    Split: TStringDynArray;
+    i, ActiveCards, CardIndex, CardStrength, TypeStrength, LetterStrength, MostLetters, JokerCount: integer;
+    CardTotals: Array[0..12] of integer;
+  begin
+    for i := 0 to 12 do
+      CardTotals[i] := 0;
+
+    Split := SplitString(aHand, ' ');
+
+    LetterStrength := 0;
+    ActiveCards := 0;
+    for CardIndex := 1 to 5  do
+    begin
+      CardStrength := 12-IndexStr(Split[0][CardIndex], CardStrengths[UseJoker]);
+      ActiveCards := ActiveCards or 1 shl CardStrength;
+      CardTotals[CardStrength] := CardTotals[CardStrength] + 1;
+      LetterStrength := (LetterStrength shl 4) + CardStrength;
+    end;
+
+    if UseJoker and (CardTotals[JokerStrength] > 0) and (CountTrueBits(ActiveCards) > 1) then
+    begin
+      JokerCount := CardTotals[JokerStrength];
+      CardTotals[JokerStrength] := 0;
+      ActiveCards := ActiveCards and not (1 shl JokerStrength);
+      MostLetters := MaxIntValue(CardTotals);
+      for i := 0 to 12 do
+        if CardTotals[i] = MostLetters then
+        begin
+          CardTotals[i] := CardTotals[i] + JokerCount;
+          Break;
+        end;
+    end;
+
+    TypeStrength := 0;
+    case CountTrueBits(ActiveCards) of
+      1: TypeStrength := 6;// Five of a kind
+      2: TypeStrength := MaxIntValue(CardTotals) + 1; // Four of a kind / Full house
+      3: TypeStrength := MaxIntValue(CardTotals); // Three of a kind / two pair
+      4: TypeStrength := 1; // One pair
+      5: TypeStrength := 0; // High Card
+    end;
+
+    Result := Split[1].ToInt64 shl 32 +
+              TypeStrength Shl 20 +
+              LetterStrength
+  end;
+
+var
+  Queue: PriorityQueue<Int64>;
+  Comparer: IComparer<Int64>;
+  s: String;
+  Work: Int64;
+begin
+  Comparer := TComparer<Int64>.Construct(
+    function(const Left, Right: Int64): integer
+    begin
+      Result := Sign((Right and MaxInt) - (Left and MaxInt));
+    end);
+
+  Queue := PriorityQueue<Int64>.Create(Comparer, Comparer);
+  for s in FInput do
+    Queue.Enqueue(ReadHand(s));
+
+  Result := 0;
+  while Queue.Count > 0 do
+  begin
+    Work := Queue.Dequeue;
+    Result := Result + (Queue.Count + 1) * (Work shr 32)
+  end;
+end;
+
+function TAdventOfCodeDay7.SolveA: Variant;
+begin
+  Result := PlayCamelCards(False);
+end;
+
+function TAdventOfCodeDay7.SolveB: Variant;
+begin
+  Result := PlayCamelCards(True);
+end;
+{$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -654,10 +751,11 @@ end;
 {$ENDREGION}
 
 
+
 initialization
 
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
-  TAdventOfCodeDay6]);
+  TAdventOfCodeDay6, TAdventOfCodeDay7]);
 
 end.
