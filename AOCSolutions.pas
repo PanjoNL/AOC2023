@@ -97,6 +97,19 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay8 = class(TAdventOfCode)
+  private
+    MapLeft, MapRight: TDictionary<String, string>;
+    StartNodesPartB: TList<string>;
+
+    function NavigateWasteLand(StartNode: string; UseZZZ: Boolean): Int64;
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
   protected
@@ -706,6 +719,97 @@ begin
   Result := PlayCamelCards(True);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay8'}
+procedure TAdventOfCodeDay8.BeforeSolve;
+var
+  i: Integer;
+  CurrentNode, s: string;
+  Split: TStringDynArray;
+begin
+
+  StartNodesPartB := TList<string>.Create;
+  MapLeft  := TDictionary<string, string>.Create;
+  MapRight := TDictionary<string, string>.Create;
+
+  for i := 2 to FInput.Count -1 do
+  begin
+    s := FInput[i].Replace('(', '').Replace(')', '').Replace(',', '');
+    Split := SplitString(s, ' ');
+    CurrentNode := Split[0];
+
+    if CurrentNode[3] = 'A' then
+      StartNodesPartB.Add(CurrentNode);
+    
+    MapLeft.Add(CurrentNode, Split[2]);
+    MapRight.Add(CurrentNode, Split[3]);
+  end;
+end;
+
+procedure TAdventOfCodeDay8.AfterSolve;
+begin
+  MapLeft.Free;
+  MapRight.Free;
+  StartNodesPartB.Free;
+end;
+
+function TAdventOfCodeDay8.NavigateWasteLand(StartNode: string; UseZZZ: Boolean): Int64;
+var
+  PendingSteps: TQueue<Boolean>;
+  StepsTaken, i: Int64;
+  GoLeft: boolean;
+  CurrentNode: string;
+begin
+  PendingSteps := TQueue<Boolean>.Create;
+
+  Result := 0;
+
+  for i := 1 to Length(FInput[0]) do
+    PendingSteps.Enqueue(FInput[0][i]= 'L');;
+
+  StepsTaken := 0;
+  CurrentNode := Startnode;
+  while PendingSteps.Count > 0 do
+  begin
+    GoLeft := PendingSteps.Dequeue;
+    if GoLeft then
+      CurrentNode := MapLeft[CurrentNode]
+    else
+      CurrentNode := MapRight[CurrentNode];
+
+    Inc(StepsTaken);
+    if ((CurrentNode[3] = 'Z') and not UseZZZ) or (CurrentNode = 'ZZZ') then
+    begin
+      Result := StepsTaken;
+      PendingSteps.Free;
+      Exit;
+    end;
+
+    PendingSteps.Enqueue(GoLeft);
+  end;
+end;
+
+function TAdventOfCodeDay8.SolveA: Variant;
+begin
+  Result := NavigateWasteLand('AAA', True);
+end;
+
+function TAdventOfCodeDay8.SolveB: Variant;
+var
+  StepsTaken: Int64;
+  CurrentNode: string;
+begin
+  Result := 0;
+  for CurrentNode in StartNodesPartB do
+  begin
+    StepsTaken := NavigateWasteLand(CurrentNode, False);
+
+    if Result = 0 then
+      Result := StepsTaken
+    else
+      Result := LCM(Result, StepsTaken);
+  end;
+end;
+{$ENDREGION}
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -738,11 +842,10 @@ end;
 {$ENDREGION}
 
 
-
 initialization
 
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
-  TAdventOfCodeDay6, TAdventOfCodeDay7]);
+  TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8]);
 
 end.

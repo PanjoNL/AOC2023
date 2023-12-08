@@ -50,6 +50,7 @@ type
   end;
 
 function GCD(Number1, Number2: int64): int64;
+function LCM(Number1, Number2: int64): int64;
 function OccurrencesOfChar(const S: string; const C: string): integer;
 function BitStringToInt(Const aBit: string): int64;
 function CountTrueBits(aInt: integer): integer;
@@ -291,6 +292,11 @@ begin
   until (Number1 = 0);
 
   result := Number2;
+end;
+
+function LCM(Number1, Number2: int64): int64;
+begin
+  Result := Trunc(Number1 * Number2 / GCD(Number1, Number2));
 end;
 
 function OccurrencesOfChar(const S: string; const C: string): integer;
