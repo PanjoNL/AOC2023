@@ -97,12 +97,17 @@ type
     function SolveB: Variant; override;
   end;
 
+  LeftRight = (Left, Right);
   TAdventOfCodeDay8 = class(TAdventOfCode)
   private
-    MapLeft, MapRight: TDictionary<String, string>;
-    StartNodesPartB: TList<string>;
+    NodeNameLookup: TDictionary<string, Integer>;
+    NodeNames: array of string;
+    Nodes: Array[LeftRight] of Array of Integer;
+    Instructions: array of LeftRight;
+    StartNodesPartB: TList<integer>;
 
-    function NavigateWasteLand(StartNode: string; UseZZZ: Boolean): Int64;
+    function NodeNameToIndex(Const aNodeName: string): integer;
+    function NavigateWasteLand(StartNodeIndex: Integer; UseZZZ: Boolean): Int64;
   protected
     procedure BeforeSolve; override;
     procedure AfterSolve; override;
@@ -722,86 +727,87 @@ end;
 {$REGION 'TAdventOfCodeDay8'}
 procedure TAdventOfCodeDay8.BeforeSolve;
 var
-  i: Integer;
-  CurrentNode, s: string;
-  Split: TStringDynArray;
+  CurrentNodeIndex, i: Integer;
+  CurrentNode: string;
 begin
+  SetLength(Instructions, Length(FInput[0]));
+  SetLength(Nodes[Left], FInput.Count - 2);
+  SetLength(Nodes[Right], FInput.Count - 2);
+  SetLength(NodeNames, FInput.Count - 2);
 
-  StartNodesPartB := TList<string>.Create;
-  MapLeft  := TDictionary<string, string>.Create;
-  MapRight := TDictionary<string, string>.Create;
+  NodeNameLookup := TDictionary<string, Integer>.Create;
+  StartNodesPartB := TList<integer>.Create;
+
+  for i := 1 to Length(FInput[0]) do
+    Instructions[i-1] := LeftRight(IfThen(FInput[0][i] = 'L', Ord(Left), Ord(Right)));
 
   for i := 2 to FInput.Count -1 do
   begin
-    s := FInput[i].Replace('(', '').Replace(')', '').Replace(',', '');
-    Split := SplitString(s, ' ');
-    CurrentNode := Split[0];
+    CurrentNode := Copy(FInput[i], 1, 3);
+    CurrentNodeIndex := NodeNameToIndex(CurrentNode);
 
     if CurrentNode[3] = 'A' then
-      StartNodesPartB.Add(CurrentNode);
+      StartNodesPartB.Add(CurrentNodeIndex);
     
-    MapLeft.Add(CurrentNode, Split[2]);
-    MapRight.Add(CurrentNode, Split[3]);
+    Nodes[Left][CurrentNodeIndex] := NodeNameToIndex(Copy(FInput[i], 8, 3));
+    Nodes[Right][CurrentNodeIndex] := NodeNameToIndex(Copy(FInput[i], 13, 3));
+    NodeNames[CurrentNodeIndex] := CurrentNode;
   end;
 end;
 
 procedure TAdventOfCodeDay8.AfterSolve;
 begin
-  MapLeft.Free;
-  MapRight.Free;
   StartNodesPartB.Free;
+  NodeNameLookup.Free;
 end;
 
-function TAdventOfCodeDay8.NavigateWasteLand(StartNode: string; UseZZZ: Boolean): Int64;
+function TAdventOfCodeDay8.NodeNameToIndex(Const aNodeName: string): integer;
+begin
+  if NodeNameLookup.TryGetValue(aNodeName, Result) then
+    Exit;
+
+  Result := NodeNameLookup.Count;
+  NodeNameLookup.Add(aNodeName, Result);
+end;
+
+function TAdventOfCodeDay8.NavigateWasteLand(StartNodeIndex: integer; UseZZZ: Boolean): Int64;
 var
-  PendingSteps: TQueue<Boolean>;
-  StepsTaken, i: Int64;
-  GoLeft: boolean;
+  CurrentNodeIndex, InstructionIndex: integer;
   CurrentNode: string;
 begin
-  PendingSteps := TQueue<Boolean>.Create;
-
   Result := 0;
 
-  for i := 1 to Length(FInput[0]) do
-    PendingSteps.Enqueue(FInput[0][i]= 'L');;
+  CurrentNodeIndex := StartNodeIndex;
+  InstructionIndex := 0;
 
-  StepsTaken := 0;
-  CurrentNode := Startnode;
-  while PendingSteps.Count > 0 do
+  while True do
   begin
-    GoLeft := PendingSteps.Dequeue;
-    if GoLeft then
-      CurrentNode := MapLeft[CurrentNode]
-    else
-      CurrentNode := MapRight[CurrentNode];
+    Inc(Result);
 
-    Inc(StepsTaken);
+    CurrentNodeIndex := Nodes[Instructions[InstructionIndex]][CurrentNodeIndex];
+    CurrentNode := NodeNames[CurrentNodeIndex];
+
     if ((CurrentNode[3] = 'Z') and not UseZZZ) or (CurrentNode = 'ZZZ') then
-    begin
-      Result := StepsTaken;
-      PendingSteps.Free;
       Exit;
-    end;
 
-    PendingSteps.Enqueue(GoLeft);
+    InstructionIndex := (InstructionIndex + 1) mod Length(Instructions);
   end;
 end;
 
 function TAdventOfCodeDay8.SolveA: Variant;
 begin
-  Result := NavigateWasteLand('AAA', True);
+  Result := NavigateWasteLand(NodeNameToIndex('AAA'), True);
 end;
 
 function TAdventOfCodeDay8.SolveB: Variant;
 var
   StepsTaken: Int64;
-  CurrentNode: string;
+  CurrentNodeIndex: integer;
 begin
   Result := 0;
-  for CurrentNode in StartNodesPartB do
+  for CurrentNodeIndex in StartNodesPartB do
   begin
-    StepsTaken := NavigateWasteLand(CurrentNode, False);
+    StepsTaken := NavigateWasteLand(CurrentNodeIndex, False);
 
     if Result = 0 then
       Result := StepsTaken
