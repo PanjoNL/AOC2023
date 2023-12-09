@@ -115,6 +115,16 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay9 = class(TAdventOfCode)
+  private
+    PrevState, NextState: int64;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
   protected
@@ -816,6 +826,73 @@ begin
   end;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay9'}
+procedure TAdventOfCodeDay9.BeforeSolve;
+var
+  s: string;
+  Nums: TList<Int64>;
+  FirstNums: TStack<Int64>;
+  split: TStringDynArray;
+  TempPrev, i, Diff: Int64;
+  AllZeros: Boolean;
+begin
+  PrevState := 0;
+  NextState := 0;
+
+  Nums := TList<Int64>.Create;
+  FirstNums := TStack<Int64>.Create;
+
+  for s in FInput do
+  begin
+    Nums.Clear;
+    split := SplitString(s, ' ');
+    for i := 0 to Length(split)-1 do
+      Nums.Add(Split[i].ToInt64);
+
+    NextState := NextState + Nums.Last;
+    FirstNums.Push(Nums.First);
+
+    AllZeros := False;
+    while not AllZeros do
+    begin
+      AllZeros := True;
+
+      for i := 0 to Nums.Count-2 do
+      begin
+        Diff := Nums[i+1] - Nums[i];
+        Nums[i] := Diff;
+        AllZeros := AllZeros and (Diff = 0)
+      end;
+
+      Nums.Delete(Nums.Count-1);
+
+      NextState := NextState + Nums.Last;
+      FirstNums.Push(Nums.First);
+    end;
+
+    TempPrev := 0;
+    while FirstNums.Count > 0 do
+      TempPrev := FirstNums.Pop - TempPrev;
+
+    Inc(PrevState, TempPrev);
+  end;
+
+  Nums.Free;
+  FirstNums.Free;
+end;
+
+function TAdventOfCodeDay9.SolveA: Variant;
+begin
+  Result := NextState;
+end;
+
+function TAdventOfCodeDay9.SolveB: Variant;
+begin
+  Result := PrevState;
+end;
+
+{$ENDREGION}
+
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
 begin
@@ -846,12 +923,10 @@ begin
   Result := null;
 end;
 {$ENDREGION}
-
-
 initialization
 
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
-  TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8]);
+  TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9]);
 
 end.
