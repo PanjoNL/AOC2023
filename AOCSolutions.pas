@@ -133,6 +133,15 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay11 = class(TAdventOfCode)
+  private
+    ResultA, ResultB: Int64;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
 
   TAdventOfCodeDay = class(TAdventOfCode)
@@ -1158,7 +1167,96 @@ begin
   end;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay11'}
+procedure TAdventOfCodeDay11.BeforeSolve;
+var
+  x, y, i, j, GalaxyCount: Integer;
+  Found: Boolean;
+  Current, Target: TPoint;
+  BaseDist: Int64;
+  EmptyRows, EmptyCols: TList<Integer>;
+  Galaxies: array of TPoint;
+begin
+  ResultA := 0;
+  ResultB := 0;
 
+  EmptyRows := TList<Integer>.Create;
+  EmptyCols := TList<Integer>.Create;
+  GalaxyCount := 0;
+
+  for y := 0 to FInput.Count-1 do
+  begin
+    Found := False;
+    for x := 1 to Length(FInput[0]) do
+      if FInput[y][x] = '#' then
+      begin
+        Found := True;
+        inc(GalaxyCount);
+      end;
+
+    if not found then
+      EmptyRows.Add(y);
+  end;
+
+  SetLength(Galaxies, GalaxyCount);
+  GalaxyCount := 0;
+
+  for x := 1 to Length(FInput[0]) do
+  begin
+    Found := False;
+    for y := 0 to FInput.Count-1 do
+    if FInput[y][x] = '#' then
+      begin
+        Found := True;
+        Galaxies[GalaxyCount] := TPoint.Create(x, y);
+        Inc(GalaxyCount);
+      end;
+
+    if not found then
+      EmptyCols.Add(x);
+  end;
+
+  for i := 0 to GalaxyCount-1 do
+  begin
+    Current := Galaxies[i];
+    for j := i+1 to GalaxyCount-1 do
+    begin
+      Target := Galaxies[J];
+
+      BaseDist := Abs(Target.x - Current.x) + Abs(Target.y - Current.y);
+      Inc(ResultA, BaseDist);
+      Inc(ResultB, BaseDist);
+
+      for x in EmptyCols do
+        if InRange(x, Min(Target.x, Current.x), Max(Target.x, Current.x)) then
+        begin
+          Inc(ResultA, 1);
+          Inc(ResultB, 1000000 - 1);
+        end;
+
+      for y in EmptyRows do
+        if InRange(y, Min(Target.y, Current.y), Max(Target.y, Current.y)) then
+        begin
+          Inc(ResultA, 1);
+          Inc(ResultB, 1000000 - 1);
+        end;
+    end;
+  end;
+
+  EmptyRows.Free;
+  EmptyCols.Free;
+end;
+
+function TAdventOfCodeDay11.SolveA: Variant;
+begin
+  Result := ResultA;
+end;
+
+function TAdventOfCodeDay11.SolveB: Variant;
+begin
+  Result := ResultB;
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1194,6 +1292,7 @@ initialization
 
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
-  TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10]);
+  TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
+  TAdventOfCodeDay11]);
 
 end.
