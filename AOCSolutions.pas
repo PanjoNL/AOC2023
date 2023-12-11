@@ -124,8 +124,13 @@ type
     function SolveB: Variant; override;
   end;
 
+  type
+    PipeSegment = (None, Vertical, Horizontal, L, J, Seven, F);
+    PipeSegments = set of PipeSegment;
+
   TAdventOfCodeDay10 = class(TAdventOfCode)
   private
+    PipeLoop: TDictionary<TPoint,PipeSegment>;
   protected
     procedure BeforeSolve; override;
     procedure AfterSolve; override;
@@ -912,20 +917,8 @@ end;
 
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay10'}
+
 procedure TAdventOfCodeDay10.BeforeSolve;
-begin
-  inherited;
-
-end;
-
-procedure TAdventOfCodeDay10.AfterSolve;
-begin
-  inherited;
-
-end;
-
-type PipeSegment = (None, Vertical, Horizontal, L, J, Seven, F);
-function TAdventOfCodeDay10.SolveA: Variant;
 Const
   TestSegment: PipeSegment = F;
   RealSegment: PipeSegment = J;
@@ -943,6 +936,8 @@ var
   Segment: PipeSegment;
   Start, Next, NewNext, Prev: TPoint;
 begin
+  PipeLoop := TDictionary<TPoint,PipeSegment>.Create;
+
   Map := TDictionary<TPoint,PipeSegment>.Create;
 
   for y := 0 to FInput.Count-1 do
@@ -970,9 +965,10 @@ begin
   Next := TPoint.Create(Start);
   Prev := TPoint.Create(Next);
 
-  Result := 0;
-  while (Next <> Start) or (Result = 0) do
+  while (Next <> Start) or (PipeLoop.Count = 0) do
   begin
+    Segment := Map[Next];
+
     case Map[Next] of
       Vertical   : NewNext := _PickNext(Prev, TPoint.Create(Next.X, Next.Y-1), TPoint.Create(Next.X, Next.Y+1));
       Horizontal : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X+1, Next.Y));
@@ -984,185 +980,41 @@ begin
       Assert(False)
     end;
 
+    PipeLoop.Add(Next, Segment);
+
     Prev := TPoint.Create(Next);
     Next := TPoint.Create(NewNext);
-    Inc(Result);
   end;
-
-  Result := Result shr 1
 end;
 
-const ZoomedSegments: array[PipeSegment] of array[0..2] of array[0..2] of PipeSegment =
-(
-  ( // None
-    (None, None, None),
-    (None, None, None),
-    (None, None, None)
-  ),
-  ( // Vertical
-    (None, Vertical, None),
-    (None, Vertical, None),
-    (None, Vertical, None)
-  ),
-    ( // Horizontal
-    (None, None, None),
-    (Horizontal, Horizontal, Horizontal),
-    (None, None, None)
-  ),
-  ( // L
-    (None, Vertical, None),
-    (None, L, Horizontal),
-    (None, None, None)
-  ),
-  (
-   // J
-    (None, Vertical, None),
-    (Horizontal, J, None),
-    (None, None, None)
-  ),
-  ( // Seven
-    (None, None, None),
-    (Horizontal, Seven, None),
-    (None, Vertical, None)
-  ),
-  ( // F
-    (None, None, None),
-    (None, F, Horizontal),
-    (None, Vertical, None)
-  )
-);
+procedure TAdventOfCodeDay10.AfterSolve;
+begin
+  PipeLoop.Free;
+end;
 
+function TAdventOfCodeDay10.SolveA: Variant;
+begin
+  Result := PipeLoop.Count shr 1;
+end;
 
 function TAdventOfCodeDay10.SolveB: Variant;
-Const
-  TestSegment: PipeSegment = F;
-  RealSegment: PipeSegment = J;
-
-  function _PickNext(aPrev, aNext1, aNext2: TPoint): TPoint;
-  begin
-    Result := aNext1;
-    if aPrev = aNext1 then
-      Result := aNext2
-  end;
-
 var
-  x, y, x2,y2, i: Integer;
-  Map: TDictionary<TPoint, PipeSegment>;
-  OrgPoints: TDictionary<TPoint,TPoint>;
+  x, y, SegmentCrossings: Integer;
   Segment: PipeSegment;
-  Start, Next, NewNext, Prev: TPoint;
-  FloodTiles, LoopTiles, floodedBase: TDictionary<TPoint, Boolean>;
-  ToCalc: TQueue<TPoint>;
-  Base: TPoint;
 begin
-  Map := TDictionary<TPoint,PipeSegment>.Create;
-  LoopTiles := TDictionary<TPoint, Boolean>.Create;
-  FloodTiles := TDictionary<TPoint, Boolean>.Create;
-  ToCalc := TQueue<TPoint>.Create;
-  OrgPoints := TDictionary<TPoint,TPoint>.Create;
-  floodedBase := TDictionary<TPoint, Boolean>.Create;
-
-  for y := 0 to FInput.Count-1 do
-  begin
-    ToCalc.Enqueue(TPoint.Create(3*(1-1)-1, 3*Y));
-    ToCalc.Enqueue(TPoint.Create(3*Length(FInput[0])+1, 3*Y));
-  end;
-
-  for x := 1 to Length(FInput[0]) do
-  begin
-    ToCalc.Enqueue(TPoint.Create(3*(X-1), 3*0-1));
-    ToCalc.Enqueue(TPoint.Create(3*(X-1), 3*(FInput.Count-1)+1));
-  end;
-
-  for y := 0 to FInput.Count-1 do
-    for x := 1 to Length(FInput[0]) do
-    begin
-      Segment := None;
-      case IndexStr(FInput[Y][X], ['|', '-', 'L', 'J', '7', 'F', '.', 'S']) of
-        0: Segment := Vertical;
-        1: Segment := Horizontal;
-        2: Segment := L;
-        3: Segment := J;
-        4: Segment := Seven;
-        5: Segment := F;
-        6: Segment := None;
-        7: begin
-            Segment := RealSegment; // TODO
-            Start := TPoint.Create(3*(X-1), 3*Y);
-           end;
-        else
-          Assert(False);
-      end;
-
-      Base := TPoint.Create(3*(X-1), 3*Y);
-      Map.Add(Base, Segment);
-      OrgPoints.Add(Base, Base);
-
-      for y2 := 0 to 2 do
-        for x2 := 0 to 2 do
-        begin
-          if (x2 = 1) and (y2 = 1) then
-            Continue;
-
-          Next := TPoint.Create(Base.X + x2 -1, Base.Y + y2 - 1);
-
-          OrgPoints.Add(Next, Base);
-          Map.Add(Next, ZoomedSegments[Segment, y2, x2])
-        end;
-
-    end;
-
-  Next := TPoint.Create(Start);
-  Prev := TPoint.Create(Next);
-
+  // https://en.wikipedia.org/wiki/Point_in_polygon#Ray_casting_algorithm
   Result := 0;
-  while (Next <> Start) or (Result = 0) do
+  for y := 0 to FInput.Count -1 do
   begin
-    case Map[Next] of
-      Vertical   : NewNext := _PickNext(Prev, TPoint.Create(Next.X, Next.Y-1), TPoint.Create(Next.X, Next.Y+1));
-      Horizontal : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X+1, Next.Y));
-      L          : NewNext := _PickNext(Prev, TPoint.Create(Next.X, Next.Y-1), TPoint.Create(Next.X+1, Next.Y));
-      J          : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X, Next.Y-1));
-      Seven      : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X, Next.Y+1));
-      F          : NewNext := _PickNext(Prev, TPoint.Create(Next.X+1, Next.Y), TPoint.Create(Next.X, Next.Y+1));
-    else
-      Assert(False)
-    end;
-
-    Prev := TPoint.Create(Next);
-    Next := TPoint.Create(NewNext);
-    LoopTiles.Add(Next, False);
-    Inc(Result);
-  end;
-
-  Result := (Map.Count div 9) - (LoopTiles.Count div 3);
-
-  while ToCalc.Count > 0 do
-  begin
-    Next := ToCalc.Dequeue;
-    if LoopTiles.ContainsKey(Next) then
-      Continue;
-    if FloodTiles.ContainsKey(Next) then
-      Continue;
-
-    FloodTiles.Add(Next, False);
-
-    if OrgPoints.TryGetValue(Next, Base) then
+    SegmentCrossings := 0;
+    for x := 0 to Length(FInput[0]) -1 do
     begin
-      if not floodedBase.ContainsKey(Base) then
-      begin
-        floodedBase.Add(Base, False);
+      if PipeLoop.TryGetValue(TPoint.Create(x, y), Segment) then
+        if Segment in [Vertical, F, Seven] then
+          Inc(SegmentCrossings);
 
-        if not LoopTiles.ContainsKey(Base) then
-          Result := Result - 1;
-      end;
-    end;
-
-    for i := 0 to 4 do
-    begin
-      NewNext := TPoint.Create(Next.X + DeltaX[i], Next.Y + DeltaY[i]);
-      if Map.ContainsKey(NewNext) then
-        ToCalc.Enqueue(NewNext);
+      if (SegmentCrossings and 1 = 1) and not PipeLoop.ContainsKey(TPoint.Create(x, y)) then
+      Inc(Result);
     end;
   end;
 end;
