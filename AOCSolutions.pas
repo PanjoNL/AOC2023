@@ -147,6 +147,14 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay12 = class(TAdventOfCode)
+  private
+    function AnalyzeHotSprings(UnfoldRecords: Boolean): int64;
+
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
 
   TAdventOfCodeDay = class(TAdventOfCode)
@@ -1109,6 +1117,163 @@ begin
   Result := ResultB;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay12'}
+type
+  SpringState = (Unkown = 1, Operational = 2, Damaged = 3);
+  TSprings = Array of SpringState;
+  TRecords = Array of Integer;
+
+function TAdventOfCodeDay12.AnalyzeHotSprings(UnfoldRecords: Boolean): int64;
+
+  function InternalAnalyze(RecordIdx, springIdx, SpringCount, RecordCount: int64; Springs: TSprings; Records: TRecords; Cache: TDictionary<Int64, Int64>): Int64;
+  var
+    LocalRecordIndex, LocalSpringIndex, expectedLength, i, Key: int64;
+  begin
+    key := 0;
+    if UnfoldRecords and InRange(springIdx, 0, SpringCount-1)  then
+    begin
+      Key := (springIdx shl 32) + (RecordIdx shl 2) + Ord(Springs[springIdx+1]) ;
+
+      if Cache.TrygetValue(key, Result) then
+        Exit;
+    end;
+
+    try
+      Result := 1;
+
+      LocalSpringIndex := springIdx;
+      LocalRecordIndex := RecordIdx;
+
+      while True do
+      begin
+        Inc(LocalSpringIndex);
+
+        if LocalSpringIndex = SpringCount then // Out of springs, Valid if all records are used
+          Exit(ifThen(LocalRecordIndex = RecordCount, 1, 0));
+
+        if Springs[LocalSpringIndex] = Damaged then
+        begin
+          if LocalRecordIndex = RecordCount then
+            Exit(0); // Found a damaged spring, but out of records => Invald
+
+          expectedLength := Records[LocalRecordIndex];
+          inc(LocalRecordIndex);
+
+          for i := 0 to expectedLength-1 do
+          begin
+            if LocalSpringIndex = SpringCount then
+              Exit(0); // We need more damaged springs, but where out of springs -> Invalid
+
+            if Springs[LocalSpringIndex] = Operational then
+              Exit(0); // We need a damaged spring, but this one is explicit operational
+
+            Inc(LocalSpringIndex);
+          end;
+
+          if LocalSpringIndex = SpringCount then // Out of springs, Valid if all records are used
+            Exit(ifThen(LocalRecordIndex = RecordCount, 1, 0));
+
+          if Springs[LocalSpringIndex] = Damaged then // We need an operational spring after the damaged spring(s), but this one is operational => Invalid
+            Exit(0);
+        end
+        else if Springs[LocalSpringIndex] = Unkown then
+        begin
+          Springs[LocalSpringIndex] := Operational;
+          Result := InternalAnalyze(LocalRecordIndex, LocalSpringIndex-1, SpringCount, RecordCount, Springs, Records, Cache);
+
+          Springs[LocalSpringIndex] := Damaged;
+          Result := Result + InternalAnalyze(LocalRecordIndex, LocalSpringIndex-1, SpringCount, RecordCount, Springs, Records, Cache);
+
+          Springs[LocalSpringIndex] := Unkown;
+
+          Exit;
+        end;
+      end;
+
+    finally
+      if key <> 0 then
+        Cache.AddOrSetValue(Key, Result);
+    end;
+  end;
+
+var
+  s: string;
+  split: TStringDynArray;
+  i, j, SpringCount, RecordCount, FoldedSpringCount, FoldedRecordCount, LocalIndex: integer;
+  LineResult: Int64;
+  Springs: TSprings;
+  Records: TRecords;
+  Cache: TDictionary<Int64,Int64>;
+begin
+  Result := 0;
+  Cache := TDictionary<Int64, Int64>.Create;
+
+  for s in FInput do
+  begin
+    split := SplitString(s, ', ');
+
+    Cache.Clear;
+    FoldedSpringCount := Length(split[0]);
+    FoldedRecordCount := Length(split)-1;
+
+    SpringCount := FoldedSpringCount;
+    RecordCount := FoldedRecordCount;
+    if UnfoldRecords then
+    begin
+      SpringCount := FoldedSpringCount*5 + 4;
+      RecordCount := FoldedRecordCount*5
+    end;
+
+    SetLength(Springs, SpringCount);
+    SetLength(Records, RecordCount);
+
+    for i := 1 to FoldedSpringCount do
+      Springs[i-1] := SpringState(Pos(split[0][i], '?.#')) ;
+
+    for i := 1 to FoldedRecordCount do
+      Records[i-1] := Split[i].ToInteger;
+
+    if UnfoldRecords then
+    begin
+      LocalIndex := FoldedSpringCount;
+
+      for i := 1 to 4 do
+      begin
+        Springs[LocalIndex] := Unkown;
+        Inc(LocalIndex);
+        for j := 0 to FoldedSpringCount -1 do
+          Springs[LocalIndex + j] := Springs[j];
+        inc(LocalIndex, FoldedSpringCount);
+      end;
+
+      LocalIndex := FoldedRecordCount;
+
+      for i := 1 to 4 do
+      begin
+        for j := 0 to FoldedRecordCount-1 do
+          Records[LocalIndex + j] := Records[j];
+        Inc(LocalIndex, FoldedRecordCount);
+      end;
+    end;
+
+    LineResult := InternalAnalyze(0, -1, SpringCount, RecordCount, Springs, Records, Cache);
+
+    Inc(Result, LineResult);
+  end;
+
+  Cache.Free;
+end;
+
+function TAdventOfCodeDay12.SolveA: Variant;
+begin
+  Result := AnalyzeHotSprings(False);
+end;
+
+function TAdventOfCodeDay12.SolveB: Variant;
+begin
+  Result := AnalyzeHotSprings(True);
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1145,6 +1310,6 @@ initialization
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
-  TAdventOfCodeDay11]);
+  TAdventOfCodeDay11,TAdventOfCodeDay12]);
 
 end.
