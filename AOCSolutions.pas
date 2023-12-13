@@ -156,6 +156,15 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay13 = class(TAdventOfCode)
+  private
+    function CountReflections(Const aMaxReflectionDiffs: integer): integer;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -1173,7 +1182,7 @@ function TAdventOfCodeDay12.AnalyzeHotSprings(UnfoldRecords: Boolean): int64;
           if LocalSpringIndex = SpringCount then // Out of springs, Valid if all records are used
             Exit(ifThen(LocalRecordIndex = RecordCount, 1, 0));
 
-          if Springs[LocalSpringIndex] = Damaged then // We need an operational spring after the damaged spring(s), but this one is operational => Invalid
+          if Springs[LocalSpringIndex] = Damaged then // We need an operational spring after the damaged spring(s), but this one is Damaged => Invalid
             Exit(0);
         end
         else if Springs[LocalSpringIndex] = Unkown then
@@ -1274,6 +1283,99 @@ begin
   Result := AnalyzeHotSprings(True);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay13'}
+procedure TAdventOfCodeDay13.BeforeSolve;
+begin
+  FInput.Add(''); // To include the last image
+end;
+
+function TAdventOfCodeDay13.CountReflections(const aMaxReflectionDiffs: integer): integer;
+
+  function IsValidReflectionLine(aLines: TStringList; aLineIndex: integer): Boolean;
+  var
+    Left, Right, DiffCount, j: Integer;
+  begin
+    Result := False;
+    Left := aLineIndex-1;
+    Right:= aLineIndex;
+    DiffCount := 0;
+
+    while (Left >= 0) and (Right < aLines.Count) do
+    begin
+      for j := 1 to Length(aLines[0]) do
+        if aLines[Left][j] <> aLines[Right][j] then
+          Inc(DiffCount);
+
+      if DiffCount > aMaxReflectionDiffs then
+        Exit;
+
+      Inc(Right);
+      Dec(Left);
+    end;
+
+    if DiffCount = aMaxReflectionDiffs then
+      Result := True
+  end;
+
+  function FindReflectionLine(aLines: TStringList): Int64;
+  var
+    i: Integer;
+  begin
+    Result := 0;
+
+    for i := 1 to aLines.Count-1 do
+      if IsValidReflectionLine(aLines, i) then
+        Exit(i);
+  end;
+
+var
+  s, s2: String;
+  i, j: integer;
+  Horz, Vert: TStringList;
+
+begin
+  Horz := TStringList.Create;
+  Vert := TStringList.Create;
+
+  Result := 0;
+
+  for s in FInput do
+  begin
+    if s <> '' then
+      Horz.Add(s)
+    else
+    begin
+      for j := 1 to Length(Horz[0]) do
+      begin
+        s2 := '';
+        for i := 0 to Horz.Count-1 do
+          s2 := s2 + Horz[i][j];
+        Vert.Add(s2)
+      end;
+
+      Inc(Result, FindReflectionLine(Vert));
+      Inc(Result, 100*FindReflectionLine(Horz));
+
+      Horz.Clear;
+      Vert.Clear;
+    end;
+  end;
+
+  Vert.Free;
+  Horz.Free;
+end;
+
+function TAdventOfCodeDay13.SolveA: Variant;
+begin
+  Result := CountReflections(0);
+end;
+
+function TAdventOfCodeDay13.SolveB: Variant;
+begin
+  Result := CountReflections(1);
+end;
+{$ENDREGION}
+
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1310,6 +1412,6 @@ initialization
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
-  TAdventOfCodeDay11,TAdventOfCodeDay12]);
+  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13]);
 
 end.
