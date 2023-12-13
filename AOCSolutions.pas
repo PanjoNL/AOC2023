@@ -125,12 +125,11 @@ type
   end;
 
   type
-    PipeSegment = (None, Vertical, Horizontal, L, J, Seven, F);
-    PipeSegments = set of PipeSegment;
-
+    PipeSegment = (None =1, Start =2, Vertical =3, Horizontal =4, NE =5, NW =6, SW =7 , SE =8);
+    
   TAdventOfCodeDay10 = class(TAdventOfCode)
   private
-    PipeLoop: TDictionary<TPoint,PipeSegment>;
+    PipeLoop: TDictionary<TPosition,PipeSegment>;
   protected
     procedure BeforeSolve; override;
     procedure AfterSolve; override;
@@ -164,7 +163,6 @@ type
     function SolveA: Variant; override;
     function SolveB: Variant; override;
   end;
-
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -934,74 +932,87 @@ end;
 
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay10'}
+Const
+  AllowedDirections: array[PipeSegment] of TAOCDirections = (
+  {None       } [],
+  {Start      } [North, South, East, West],
+  {Vertical   } [North, South],
+  {Horizontal } [East, West],
+  {NE         } [North, East],
+  {NW         } [North, West],
+  {SW         } [South, West],
+  {SE         } [South, East]
+  );
 
 procedure TAdventOfCodeDay10.BeforeSolve;
-Const
-  TestSegment: PipeSegment = F;
-  RealSegment: PipeSegment = J;
+Var
+  Map: TDictionary<TPosition, PipeSegment>;
 
-  function _PickNext(aPrev, aNext1, aNext2: TPoint): TPoint;
+  function FindLoop(aStart: TPosition; aStartSegment: PipeSegment): Boolean;
+  var
+    Next, NewNext, Prev: TPosition;
+    CurrentSegment, NextSegment: PipeSegment;
+    Direction: TAOCDirection;
+    Found: Boolean;
   begin
-    Result := aNext1;
-    if aPrev = aNext1 then
-      Result := aNext2
+    PipeLoop.Clear;
+
+    CurrentSegment := aStartSegment;
+    Next := aStart;
+    Prev := Next.Clone;
+
+    while True do
+    begin
+      Found := False;
+      for Direction in AllowedDirections[CurrentSegment] do
+      begin
+        NewNext := Next.Clone.ApplyDirection(Direction);
+        if NewNext.Equals(Prev) then
+          Continue;
+
+        NextSegment := Map[NewNext];
+        if ([RotateDirection(Direction, 2)] * AllowedDirections[NextSegment]) = [] then
+          Continue;
+
+        Found := True;
+        CurrentSegment := NextSegment;
+        prev := Next.Clone;
+        Next.ApplyDirection(Direction);
+        PipeLoop.Add(Next.Clone, CurrentSegment);
+
+        if NextSegment = PipeSegment.Start then
+          Exit(True);
+
+        break;
+      end;
+
+      if not found then
+        Exit(False);
+    end;
   end;
 
 var
   x, y: Integer;
-  Map: TDictionary<TPoint, PipeSegment>;
+  Start: TPosition;
   Segment: PipeSegment;
-  Start, Next, NewNext, Prev: TPoint;
 begin
-  PipeLoop := TDictionary<TPoint,PipeSegment>.Create;
+  PipeLoop := TDictionary<TPosition,PipeSegment>.Create;
 
-  Map := TDictionary<TPoint,PipeSegment>.Create;
+  Map := TDictionary<TPosition,PipeSegment>.Create;
 
   for y := 0 to FInput.Count-1 do
     for x := 1 to Length(FInput[0]) do
     begin
-      Segment := None;
-      case IndexStr(FInput[Y][X], ['|', '-', 'L', 'J', '7', 'F', '.', 'S']) of
-        0: Segment := Vertical;
-        1: Segment := Horizontal;
-        2: Segment := L;
-        3: Segment := J;
-        4: Segment := Seven;
-        5: Segment := F;
-        6: Segment := None;
-        7: begin
-            Segment := RealSegment; // TODO
-            Start := TPoint.Create(X-1, Y);
-           end;
-        else
-          Assert(False);
-      end;
-      Map.Add(TPoint.Create(X-1, Y), Segment);
+    Segment := PipeSegment(Pos(FInput[Y][X], '.S|-LJ7F'));
+      if Segment = PipeSegment.Start then
+        Start := TPosition.Create(X-1, Y);
+
+      Map.Add(TPosition.Create(X-1, Y), Segment);
     end;
 
-  Next := TPoint.Create(Start);
-  Prev := TPoint.Create(Next);
-
-  while (Next <> Start) or (PipeLoop.Count = 0) do
-  begin
-    Segment := Map[Next];
-
-    case Map[Next] of
-      Vertical   : NewNext := _PickNext(Prev, TPoint.Create(Next.X, Next.Y-1), TPoint.Create(Next.X, Next.Y+1));
-      Horizontal : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X+1, Next.Y));
-      L          : NewNext := _PickNext(Prev, TPoint.Create(Next.X, Next.Y-1), TPoint.Create(Next.X+1, Next.Y));
-      J          : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X, Next.Y-1));
-      Seven      : NewNext := _PickNext(Prev, TPoint.Create(Next.X-1, Next.Y), TPoint.Create(Next.X, Next.Y+1));
-      F          : NewNext := _PickNext(Prev, TPoint.Create(Next.X+1, Next.Y), TPoint.Create(Next.X, Next.Y+1));
-    else
-      Assert(False)
-    end;
-
-    PipeLoop.Add(Next, Segment);
-
-    Prev := TPoint.Create(Next);
-    Next := TPoint.Create(NewNext);
-  end;
+  for Segment in [Vertical, Horizontal, NE, NW, SW, SE] do
+    if FindLoop(Start.Clone, Segment) then
+      Exit;
 end;
 
 procedure TAdventOfCodeDay10.AfterSolve;
@@ -1026,11 +1037,11 @@ begin
     SegmentCrossings := 0;
     for x := 0 to Length(FInput[0]) -1 do
     begin
-      if PipeLoop.TryGetValue(TPoint.Create(x, y), Segment) then
-        if Segment in [Vertical, F, Seven] then
+      if PipeLoop.TryGetValue(TPosition.Create(x, y), Segment) then
+        if Segment in [Vertical, SE, SW] then
           Inc(SegmentCrossings);
 
-      if (SegmentCrossings and 1 = 1) and not PipeLoop.ContainsKey(TPoint.Create(x, y)) then
+      if (SegmentCrossings and 1 = 1) and not PipeLoop.ContainsKey(TPosition.Create(x, y)) then
       Inc(Result);
     end;
   end;

@@ -8,7 +8,8 @@ uses
 
 type
   TAdventOfCodeRef = class of TAdventOfCode;
-  TDirection = (Right = 0, Down, Left, up);
+  TAOCDirection = (North = 0, East, South, West);
+  TAOCDirections = set of TAOCDirection;
 
 type AOCUtils = class
   public
@@ -30,11 +31,13 @@ type
   TPosition = record
     x: int64;
     y: int64;
-    function SetIt(const aX, aY: int64): TPosition;
+    class function Create(const aX, aY: int64): TPosition; static;
     function AddDelta(const aX, aY: int64): TPosition;
     function Equals(Const Other: TPosition): Boolean;
     function Clone: TPosition;
-    function ApplyDirection(Const aDirection: TDirection): TPosition;
+    function ApplyDirection(Const aDirection: TAOCDirection): TPosition;
+  private
+    function SetIt(const aX, aY: int64): TPosition;
   end;
 
   TPosition3 = record
@@ -55,7 +58,7 @@ function OccurrencesOfChar(const S: string; const C: string): integer;
 function BitStringToInt(Const aBit: string): int64;
 function CountTrueBits(aInt: integer): integer;
 function InRange(const aTarget, aLeft, aRight: int64): boolean;
-function RotateDirection(aDirection: TDirection; aAmmount: integer): TDirection;
+function RotateDirection(aDirection: TAOCDirection; aAmmount: integer): TAOCDirection;
 function IsNumber(aNumber: string): Boolean;
 function DeleteRepeatedSpaces(const s: string):string;
 
@@ -218,13 +221,18 @@ begin
   Result.y := Self.y;
 end;
 
-function TPosition.ApplyDirection(Const aDirection: TDirection): TPosition;
+class function TPosition.Create(const aX, aY: int64): TPosition;
+begin
+  Result.SetIt(aX, aY);
+end;
+
+function TPosition.ApplyDirection(Const aDirection: TAOCDirection): TPosition;
 begin
   case aDirection of
-    Up: AddDelta(0, -1);
-    Right: AddDelta(1, 0);
-    Down: AddDelta(0, 1);
-    Left: AddDelta(-1, 0);
+    North: AddDelta(0, -1);
+    East: AddDelta(1, 0);
+    South: AddDelta(0, 1);
+    West: AddDelta(-1, 0);
   end;
   Result := Self
 end;
@@ -341,9 +349,9 @@ begin
   Result := (aTarget >= aLeft) and (aTarget <= aRight);
 end;
 
-function RotateDirection(aDirection: TDirection; aAmmount: integer): TDirection;
+function RotateDirection(aDirection: TAOCDirection; aAmmount: integer): TAOCDirection;
 begin
-  Result := TDirection((aAmmount + Ord(aDirection)) mod 4);
+  Result := TAOCDirection((aAmmount + Ord(aDirection)) mod 4);
 end;
 
 function IsNumber(aNumber: string): Boolean;
