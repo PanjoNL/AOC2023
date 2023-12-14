@@ -164,6 +164,15 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay14 = class(TAdventOfCode)
+  private
+    function CalculateLoad(PartB: Boolean): Int64;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
   protected
@@ -1386,7 +1395,137 @@ begin
   Result := CountReflections(1);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay14'}
+type TRockKind = (RockNone=1, RockRound=2, RockSquare=3);
+function TAdventOfCodeDay14.CalculateLoad(PartB: Boolean): Int64;
+var
+  Platform: array of array of TRockKind;
+  MaxX, MaxY: Integer;
 
+  function MapToString: string;
+  var
+    x, y: integer;
+  begin
+    Result := '';
+
+    for x := 0 to MaxX do
+      for y := 0 to MaxY do
+        Result := Result + ord(Platform[x][y]).ToString;
+  end;
+
+  function CalcResult: Integer;
+  var
+    x, y: integer;
+  begin
+    Result := 0;
+    for x := 0 to MaxX do
+      for y := 0 to MaxY do
+        if Platform[x][y] = RockRound then
+          Inc(Result, FInput.Count - y);
+  end;
+
+  procedure TiltPlatform(Const aDeltaX, aDeltaY: integer);
+  var
+    LoopX, LoopY, NewX, NewY, TempX, TempY: Integer;
+  begin
+    for LoopX := 0 to MaXX do
+      for LoopY := 0 to MaxY do
+      begin
+        if Platform[LoopX][LoopY] <> RockRound then
+          Continue;
+
+        NewX := LoopX;
+        NewY := LoopY;
+        TempX := LoopX;
+        TempY := LoopY;
+        while InRange(TempX, 0, MaxX) and InRange(TempY, 0, MaxY) do
+        begin
+          case Platform[TempX][TempY] of
+            RockSquare: Break;
+            RockNone:
+              begin
+                NewX := TempX;
+                NewY := TempY
+              end;
+          end;
+
+          Inc(TempX, aDeltaX);
+          Inc(TempY, aDeltaY);
+        end;
+
+        Platform[LoopX][LoopY] := RockNone;
+        Platform[NewX][NewY] := RockRound;
+      end;
+  end;
+
+const TiltingRounds: Array[Boolean] of int64 = (1, 1000000000);
+var
+  MapString: String;
+  x, y: Integer;
+  CurrentRound, CacheResult, StepSize, StepsToTake: Int64;
+  Cache: TDictionary<string, Int64>;
+  FillChache: Boolean;
+begin
+  Cache := TDictionary<string, Int64>.Create;
+
+  FillChache := PartB;
+
+  MaxX := Length(FInput[0])-1;
+  MaxY := FInput.Count-1;
+
+  SetLength(Platform, MaxX);
+  for x := 0 to MaxX do
+    SetLength(Platform[X], MaxY);
+
+  for y := 0 to FInput.Count-1 do
+    for x := 1 to Length(FInput[0]) do
+      Platform[x-1][y] := TRockKind(Pos(FInput[Y][X], '.O#'));
+
+  CurrentRound := 1;
+  while CurrentRound<= TiltingRounds[PartB] do
+  begin
+    Inc(CurrentRound);
+
+    TiltPlatform(0, -1);
+    if PartB then
+    begin
+      TiltPlatform(-1, 0);
+      TiltPlatform(0, 1);
+      TiltPlatform(1, 0);
+    end;
+
+    if FillChache then
+    begin
+      MapString := MapToString;
+      if Cache.TryGetValue(MapToString, CacheResult) then
+      begin
+        FillChache := False;
+
+        StepSize := CurrentRound - CacheResult;
+        StepsToTake := 1000000000 - CurrentRound;
+
+        CurrentRound := CurrentRound + StepSize * (StepsToTake div StepSize)
+      end;
+
+      if FillChache then
+        Cache.Add(MapString, CurrentRound);
+    end;
+  end;
+
+  Result := CalcResult;
+  Cache.Free;
+end;
+
+function TAdventOfCodeDay14.SolveA: Variant;
+begin
+  Result := CalculateLoad(False) ;
+end;
+
+function TAdventOfCodeDay14.SolveB: Variant;
+begin
+  Result := CalculateLoad(True) ;
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1423,6 +1562,6 @@ initialization
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
-  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13]);
+  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14]);
 
 end.
