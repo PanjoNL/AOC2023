@@ -1411,120 +1411,125 @@ var
   Platform: array of array of TRockKind;
   MaxX, MaxY: Integer;
 
-  function MapToString: string;
+  procedure TiltPlatform(Const Loop1StartX, Loop1StartY, Loop1DeltaX, Loop1DeltaY, Loop2DeltaX, Loop2DeltaY: integer);
   var
-    x, y: integer;
+    Loop1X, Loop1Y, Loop2X, Loop2Y, NextX, NextY: integer;
   begin
-    Result := '';
+    Loop1X := Loop1StartX;
+    Loop1Y := Loop1StartY;
 
-    for x := 0 to MaxX do
-      for y := 0 to MaxY do
-        Result := Result + ord(Platform[x][y]).ToString;
-  end;
+    while InRange(Loop1X, 0, MaxX) and InRange(Loop1Y, 0, MaxY) do
+    begin
+      Loop2X := Loop1X;
+      Loop2Y := Loop1Y;
+      NextX := Loop2X;
+      NextY := Loop2Y;
 
-  function CalcResult: Integer;
-  var
-    x, y: integer;
-  begin
-    Result := 0;
-    for x := 0 to MaxX do
-      for y := 0 to MaxY do
-        if Platform[x][y] = RockRound then
-          Inc(Result, FInput.Count - y);
-  end;
-
-  procedure TiltPlatform(Const aDeltaX, aDeltaY: integer);
-  var
-    LoopX, LoopY, NewX, NewY, TempX, TempY: Integer;
-  begin
-    for LoopX := 0 to MaXX do
-      for LoopY := 0 to MaxY do
+      while InRange(Loop2X, 0, MaxX) and InRange(Loop2Y, 0, MaxY) do
       begin
-        if Platform[LoopX][LoopY] <> RockRound then
-          Continue;
+        case Platform[Loop2X][Loop2Y] of
+          RockSquare:
+            begin
+              NextX := Loop2x + Loop2DeltaX;
+              NextY := Loop2Y + Loop2DeltaY;
+            end;
+          RockRound:
+            begin
+              Platform[Loop2X][Loop2Y] := RockNone;
+              Platform[NextX][NextY] := RockRound;
 
-        NewX := LoopX;
-        NewY := LoopY;
-        TempX := LoopX;
-        TempY := LoopY;
-        while InRange(TempX, 0, MaxX) and InRange(TempY, 0, MaxY) do
-        begin
-          case Platform[TempX][TempY] of
-            RockSquare: Break;
-            RockNone:
-              begin
-                NewX := TempX;
-                NewY := TempY
-              end;
-          end;
-
-          Inc(TempX, aDeltaX);
-          Inc(TempY, aDeltaY);
+              Inc(NextX, Loop2DeltaX);
+              Inc(NextY, Loop2DeltaY);
+            end;
         end;
 
-        Platform[LoopX][LoopY] := RockNone;
-        Platform[NewX][NewY] := RockRound;
+        Inc(Loop2X, Loop2DeltaX);
+        Inc(Loop2Y, Loop2DeltaY);
       end;
+
+      Inc(Loop1X, Loop1DeltaX);
+      Inc(Loop1Y, Loop1DeltaY);
+    end;
   end;
 
 const TiltingRounds: Array[Boolean] of int64 = (1, 1000000000);
 var
   MapString: String;
   x, y: Integer;
-  CurrentRound, CacheResult, StepSize, StepsToTake: Int64;
-  Cache: TDictionary<string, Int64>;
+  CurrentRound, StepSize, StepsToTake, CacheIdx, Weigth: Int64;
   FillChache: Boolean;
+  Cache: TStringList;
+  MapStringBuilder: TStringBuilder;
 begin
-  Cache := TDictionary<string, Int64>.Create;
-  FillChache := False;
+  Cache := TStringList.Create;
+  MapStringBuilder := TStringBuilder.Create;
+  try
+    FillChache := not PartB;
+    MaxX := Length(FInput[0])-1;
+    MaxY := FInput.Count-1;
 
-  MaxX := Length(FInput[0])-1;
-  MaxY := FInput.Count-1;
+    SetLength(Platform, MaxX);
+    for x := 0 to MaxX do
+      SetLength(Platform[X], MaxY);
 
-  SetLength(Platform, MaxX);
-  for x := 0 to MaxX do
-    SetLength(Platform[X], MaxY);
+    for y := 0 to FInput.Count-1 do
+      for x := 1 to Length(FInput[0]) do
+        Platform[x-1][y] := TRockKind(Pos(FInput[Y][X], '.O#'));
 
-  for y := 0 to FInput.Count-1 do
-    for x := 1 to Length(FInput[0]) do
-      Platform[x-1][y] := TRockKind(Pos(FInput[Y][X], '.O#'));
-
-  CurrentRound := 1;
-  while CurrentRound<= TiltingRounds[PartB] do
-  begin
-    Inc(CurrentRound);
-
-    TiltPlatform(0, -1);
-    if PartB then
+    CurrentRound := 1;
+    while CurrentRound<= TiltingRounds[PartB] do
     begin
-      TiltPlatform(-1, 0);
-      TiltPlatform(0, 1);
-      TiltPlatform(1, 0);
-    end;
+      TiltPlatform(0, 0, 1, 0, 0, 1);
 
-    if CurrentRound = 75 then
-      FillChache := True;
-
-    if FillChache then
-    begin
-      MapString := MapToString;
-      if Cache.TryGetValue(MapToString, CacheResult) then
+      if PartB then
       begin
-        FillChache := False;
-
-        StepSize := CurrentRound - CacheResult;
-        StepsToTake := 1000000000 - CurrentRound;
-
-        CurrentRound := CurrentRound + StepSize * (StepsToTake div StepSize)
+        TiltPlatform(0, 0, 0, 1, 1, 0);     // West
+        TiltPlatform(0, MaxY, 1, 0, 0, -1); // South
+        TiltPlatform(MaxX, 0, 0, 1, -1, 0); // West
       end;
 
-      if FillChache then
-        Cache.Add(MapString, CurrentRound);
-    end;
-  end;
+      if CurrentRound = 75 then
+        FillChache := True;
 
-  Result := CalcResult;
-  Cache.Free;
+      if FillChache then
+      begin
+        Weigth := 0;
+        MapString := '';
+        MapStringBuilder.Clear;
+
+        for x := 0 to MaxX do
+          for y := 0 to MaxY do
+            if Platform[x][y] = RockRound then
+            begin
+              Inc(Weigth, MaxY + 1 - y);
+              MapStringBuilder.Append(x*maxX + y);
+            end;
+
+        MapString := MapStringBuilder.ToString;
+
+        CacheIdx := Cache.IndexOf(MapString);
+        if CacheIdx >= 0 then
+        begin
+          StepSize := Cache.Count - CacheIdx;
+          StepsToTake := 1000000000 - CurrentRound;
+          StepsToTake := StepsToTake mod StepSize;
+          CacheIdx := CacheIdx + StepsToTake;
+          Result := Int64(Cache.Objects[CacheIdx]);
+          Exit;
+        end;
+
+        if FillChache then
+          Cache.AddObject(MapString, TObject(Weigth));
+      end;
+
+      Inc(CurrentRound);
+    end;
+
+    Result := Int64(Cache.Objects[0]);
+  finally
+    Cache.Free;
+    MapStringBuilder.Free;
+  end;
 end;
 
 function TAdventOfCodeDay14.SolveA: Variant;
