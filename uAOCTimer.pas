@@ -12,6 +12,7 @@ type
     class function Start: AOCTimer; static;
 
     function ElapsedTime(aTimerType: TTimerType = MicroSeconds): integer;
+    procedure WriteTimeToDebug(Const aMsg: String; aTimerType: TTimerType = MicroSeconds);
     procedure Reset;
 end;
 
@@ -34,6 +35,11 @@ end;
 class function AOCTimer.Start: AOCTimer;
 begin
   Result.Reset;
+end;
+
+procedure AOCTimer.WriteTimeToDebug(const aMsg: String; aTimerType: TTimerType);
+begin
+  Writeln(aMsg, ' ', ElapsedTime(aTimerType), TimeIndicator[aTimerType]);
 end;
 
 function AOCTimer.ElapsedTime(aTimerType: TTimerType): Integer;

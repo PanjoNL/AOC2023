@@ -9,7 +9,7 @@ uses
   System.Diagnostics, AOCBase, RegularExpressions, System.DateUtils,
   System.StrUtils,
   System.Math, uAOCUtils, System.Types, PriorityQueues, System.Json,
-  AocLetterReader;
+  AocLetterReader, uAOCTimer;
 
 type
   SetOfByte = Set of Byte;
@@ -171,6 +171,15 @@ type
     function SolveA: Variant; override;
     function SolveB: Variant; override;
   end;
+
+  TAdventOfCodeDay15 = class(TAdventOfCode)
+  private
+    function Hash(aValue: string): Integer;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
 
   TAdventOfCodeDay = class(TAdventOfCode)
@@ -1467,8 +1476,7 @@ var
   FillChache: Boolean;
 begin
   Cache := TDictionary<string, Int64>.Create;
-
-  FillChache := PartB;
+  FillChache := False;
 
   MaxX := Length(FInput[0])-1;
   MaxY := FInput.Count-1;
@@ -1493,6 +1501,9 @@ begin
       TiltPlatform(0, 1);
       TiltPlatform(1, 0);
     end;
+
+    if CurrentRound = 75 then
+      FillChache := True;
 
     if FillChache then
     begin
@@ -1526,6 +1537,82 @@ begin
   Result := CalculateLoad(True) ;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay15}
+function TAdventOfCodeDay15.Hash(aValue: string): Integer;
+var i: Integer;
+begin
+  Result := 0;
+
+  for i := 1 to Length(aValue) do
+  begin
+    Result := Result + Ord(aValue[i]);
+    Result := Result * 17;
+    Result := Result mod 256
+  end;
+end;
+
+function TAdventOfCodeDay15.SolveA: Variant;
+var
+  s: String;
+begin
+  Result := 0;
+  for s in SplitString(FInput[0], ',') do
+    Inc(Result, Hash(s));
+end;
+
+function TAdventOfCodeDay15.SolveB: Variant;
+var
+  Boxes: TDictionary<Integer,TStringList>;
+  s, LensLabel: String;
+  i, FocalLength, BoxId, LensIndex: Integer;
+  split, Split2: TStringDynArray;
+  BoxContent: TStringList;
+begin
+  Boxes := TObjectDictionary<Integer,TStringList>.Create([doOwnsValues]);
+
+  Split := SplitString(FInput[0], ',');
+  Result := 0;
+
+  for i := 0 to Length(split)-1 do
+  begin
+    s := split[i];
+
+    split2 := SplitString(s, '-=');
+    LensLabel := Split2[0];
+
+    BoxId := Hash(LensLabel);
+    if not Boxes.TryGetValue(BoxId, BoxContent) then
+    begin
+      BoxContent := TStringList.Create;
+      Boxes.Add(BoxId, BoxContent);
+    end;
+
+    LensIndex := BoxContent.IndexOf(LensLabel);
+    if s.Contains('-') then
+    begin
+      if LensIndex >= 0 then
+        BoxContent.Delete(LensIndex);
+    end
+    else
+    begin
+      FocalLength := Split2[1].ToInteger;
+
+      if LensIndex >= 0 then
+        BoxContent.Objects[LensIndex] := TObject(FocalLength)
+      else
+        BoxContent.AddObject(LensLabel, TObject(FocalLength));
+    end;
+  end;
+
+  for BoxId := 0 to 255 do
+    if Boxes.TryGetValue(BoxId, BoxContent) then
+      for LensIndex := 0 to BoxContent.Count -1 do
+        Inc(Result, (BoxId+1) * (LensIndex+1) * Integer(BoxContent.Objects[LensIndex]));
+    
+  Boxes.Free;
+end;
+{$ENDREGION}
+
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1557,11 +1644,12 @@ begin
   Result := null;
 end;
 {$ENDREGION}
+
 initialization
 
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
-  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14]);
+  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15]);
 
 end.
