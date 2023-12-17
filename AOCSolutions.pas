@@ -9,7 +9,8 @@ uses
   System.Diagnostics, AOCBase, RegularExpressions, System.DateUtils,
   System.StrUtils,
   System.Math, uAOCUtils, System.Types, PriorityQueues, System.Json,
-  AocLetterReader, uAOCTimer;
+  AocLetterReader, uAOCTimer,
+  System.Threading;
 
 type
   SetOfByte = Set of Byte;
@@ -1718,59 +1719,57 @@ type
   TCrucibleNode = record
     Position: TPosition;
     CurrentDir: TAOCDirection;
-    HeatLoss,
-    PredictedHeatLoss: Integer;
-
-    Class function Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss, aPredictedHeatLoss: Integer): TCrucibleNode; static;
+    HeatLoss: Integer;
+    Class function Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss: Integer): TCrucibleNode; static;
   end;
 
-class function TCrucibleNode.Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss, aPredictedHeatLoss: Integer): TCrucibleNode;
+class function TCrucibleNode.Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss: Integer): TCrucibleNode;
 begin
   Result.Position := aPosition;
   Result.CurrentDir := aCurrentDir;
   Result.HeatLoss := aHeatLoss;
-  Result.PredictedHeatLoss := aPredictedHeatLoss;
 end;
 
 procedure TAdventOfCodeDay17.BeforeSolve;
 var
   x,y: Integer;
 begin
-  MaxX := Length(FInput[0])-1;
-  MaxY := FInput.Count -1;
+  MaxX := Length(FInput[0]);
+  MaxY := FInput.Count;
 
-  SetLength(Map, MaxX+1);
+  SetLength(Map, MaxX);
   for x := 0 to MaxX do
-    SetLength(Map[x], MaxY+1);
+    SetLength(Map[x], MaxY);
 
-  for y := 0 to MaxY do
-    for x := 0 to MaxX do
+  for y := 0 to MaxY-1 do
+    for x := 0 to MaxX-1 do
       Map[x][y] := StrToInt(FInput[Y][X+1]);
 end;
 
 function TAdventOfCodeDay17.MoveCrucible(UseUltaCrucible: boolean): Integer;
 var
-  HeatLoss, i: integer;
-  Seen: TDictionary<integer, integer>;
+  HeatLoss, i, key, GridSize: integer;
   Work: PriorityQueue<TCrucibleNode>;
   CurrentWork, NewWork: TCrucibleNode;
   Comparer: IComparer<TCrucibleNode>;
   NextDir: TAOCDirection;
   Init: Boolean;
   NextPosition: TPosition;
+  Seen: array of integer;
 begin
+  GridSize := MaxX * MaxY;
+
   Comparer := TComparer<TCrucibleNode>.Construct(
-      function(const Left, Right: TCrucibleNode): integer
-      begin
-        result := Sign(Left.HeatLoss - Right.HeatLoss);
-        if Result = 0 then
-          result := Sign(Left.PredictedHeatLoss - Right.PredictedHeatLoss);
-      end);
+    function(const Left, Right: TCrucibleNode): integer
+    begin
+      result := Sign(Left.HeatLoss - Right.HeatLoss);
+    end);
 
   Work := PriorityQueue<TCrucibleNode>.Create(Comparer, Comparer);
-  Seen := TDictionary<Integer, Integer>.Create;
 
-  CurrentWork := TCrucibleNode.Create(TPosition.Create(0,0), East, -Map[0][0], 0);
+  SetLength(Seen, GridSize * 2);
+
+  CurrentWork := TCrucibleNode.Create(TPosition.Create(0,0), East, 0);
   Work.Enqueue(CurrentWork);
 
   Result := 0;
@@ -1780,15 +1779,12 @@ begin
   begin
     CurrentWork := Work.Dequeue;
 
-    i := (CurrentWork.Position.x shl 20) + (CurrentWork.Position.y shl 10) + Ord(CurrentWork.CurrentDir);
-    if Seen.ContainsKey(i) then
-        Continue;
+    if (CurrentWork.Position.y = MaxY-1) and (CurrentWork.Position.x = MaxX-1) then
+      Exit(CurrentWork.HeatLoss);
 
-    Seen.Add(i, 0);
-
-    HeatLoss := Map[CurrentWork.Position.x][CurrentWork.Position.y];
-    if (CurrentWork.Position.y = MaxY) and (CurrentWork.Position.x = MaxX) then
-      Exit(CurrentWork.HeatLoss + HeatLoss);
+    key := (CurrentWork.Position.x * MaxX + CurrentWork.Position.y) + (Ord(CurrentWork.CurrentDir) and 1) * GridSize;
+    if Seen[key] <> CurrentWork.HeatLoss then
+      Continue;
 
     for NextDir in [North, East, South, West] do
     begin
@@ -1803,10 +1799,10 @@ begin
       begin
         NextPosition := CurrentWork.Position.Clone.ApplyDirection(NextDir, i);
 
-        if not InRange(NextPosition.x, 0, MaxX) then
+        if not InRange(NextPosition.x, 0, MaxX-1) then
           Break;
 
-        if not InRange(NextPosition.y, 0, MaxY) then
+        if not InRange(NextPosition.y, 0, MaxY-1) then
           Break;
 
         HeatLoss := HeatLoss + Map[NextPosition.x][NextPosition.y];
@@ -1814,11 +1810,16 @@ begin
         if UseUltaCrucible and (i < 4) then
           Continue;
 
-        NewWork := TCrucibleNode.Create(
-          NextPosition,
-          NextDir,
-          CurrentWork.HeatLoss + HeatLoss,
-          CurrentWork.HeatLoss + HeatLoss + MaxX - NextPosition.x + MaxY - NextPosition.y);
+        NewWork := TCrucibleNode.Create(NextPosition, NextDir, CurrentWork.HeatLoss + HeatLoss);
+
+        key := (NewWork.Position.x * MaxX + NewWork.Position.y) + (Ord(NewWork.CurrentDir) and 1) * GridSize;
+
+        if Seen[Key] = 0 then
+          Seen[Key] := NewWork.HeatLoss // new entry
+        else if Seen[Key] <= NewWork.HeatLoss then
+          Continue // Found a path with less heatloss
+        else
+          Seen[Key] := NewWork.HeatLoss; // Mark Path as best path until now
 
         Work.Enqueue(NewWork);
       end;
