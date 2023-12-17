@@ -180,6 +180,31 @@ type
     function SolveB: Variant; override;
   end;
 
+  TReflector = (refNone=1, RevPos, Revneg, RevHorz, RevVert);
+  TAdventOfCodeDay16 = class(TAdventOfCode)
+  private
+    Map: array of array of TReflector;
+    MaxX, MaxY: Integer;
+
+    function FireBeam(aFrom: TPosition; InitialDirection: TAOCDirection): integer;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+  TAdventOfCodeDay17 = class(TAdventOfCode)
+  private
+    Map: array of array of integer;
+    MaxX, MaxY: Integer;
+
+    function MoveCrucible(UseUltaCrucible: boolean): Integer;
+  protected
+    procedure BeforeSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
 
 
   TAdventOfCodeDay = class(TAdventOfCode)
@@ -1163,81 +1188,81 @@ type
 
 function TAdventOfCodeDay12.AnalyzeHotSprings(UnfoldRecords: Boolean): int64;
 
-  function InternalAnalyze(RecordIdx, springIdx, SpringCount, RecordCount: int64; Springs: TSprings; Records: TRecords; Cache: TDictionary<Int64, Int64>): Int64;
+  function InternalAnalyze(aSpring: SpringState; RecordIdx, springIdx, SpringCount, MaxSpringCount, RecordCount, MaxRecordCount: int64; Springs: TSprings; Records: TRecords; Cache: TDictionary<Int64, Int64>): Int64;
   var
     LocalRecordIndex, LocalSpringIndex, expectedLength, i, Key: int64;
+    LocalSpring: SpringState;
   begin
     key := 0;
-    if UnfoldRecords and InRange(springIdx, 0, SpringCount-1)  then
-    begin
-      Key := (springIdx shl 32) + (RecordIdx shl 2) + Ord(Springs[springIdx+1]) ;
-
-      if Cache.TrygetValue(key, Result) then
-        Exit;
-    end;
-
     try
       Result := 1;
 
       LocalSpringIndex := springIdx;
       LocalRecordIndex := RecordIdx;
+      LocalSpring := aSpring;
 
       while True do
       begin
-        Inc(LocalSpringIndex);
-
-        if LocalSpringIndex = SpringCount then // Out of springs, Valid if all records are used
-          Exit(ifThen(LocalRecordIndex = RecordCount, 1, 0));
-
-        if Springs[LocalSpringIndex] = Damaged then
+        if UnfoldRecords then
         begin
-          if LocalRecordIndex = RecordCount then
+          Key := (LocalSpringIndex shl 16) + (LocalRecordIndex shl 2) + Ord(LocalSpring) ;
+
+          if Cache.TrygetValue(key, Result) then
+          begin
+            Key := 0;
+            Exit;
+          end;
+        end;
+
+        if LocalSpring = Damaged then
+        begin
+          if LocalRecordIndex = MaxRecordCount then
             Exit(0); // Found a damaged spring, but out of records => Invald
 
-          expectedLength := Records[LocalRecordIndex];
+          expectedLength := Records[LocalRecordIndex mod RecordCount];
           inc(LocalRecordIndex);
 
           for i := 0 to expectedLength-1 do
           begin
-            if LocalSpringIndex = SpringCount then
+            if LocalSpringIndex = MaxSpringCount then
               Exit(0); // We need more damaged springs, but where out of springs -> Invalid
 
-            if Springs[LocalSpringIndex] = Operational then
+            if Springs[LocalSpringIndex mod SpringCount] = Operational then
               Exit(0); // We need a damaged spring, but this one is explicit operational
 
             Inc(LocalSpringIndex);
           end;
 
-          if LocalSpringIndex = SpringCount then // Out of springs, Valid if all records are used
-            Exit(ifThen(LocalRecordIndex = RecordCount, 1, 0));
+          if LocalSpringIndex = MaxSpringCount then // Out of springs, Valid if all records are used
+            Exit(ifThen(LocalRecordIndex = MaxRecordCount, 1, 0));
 
-          if Springs[LocalSpringIndex] = Damaged then // We need an operational spring after the damaged spring(s), but this one is Damaged => Invalid
+          if Springs[LocalSpringIndex mod SpringCount] = Damaged then // We need an operational spring after the damaged spring(s), but this one is Damaged => Invalid
             Exit(0);
         end
-        else if Springs[LocalSpringIndex] = Unkown then
+        else if LocalSpring = Unkown then
         begin
-          Springs[LocalSpringIndex] := Operational;
-          Result := InternalAnalyze(LocalRecordIndex, LocalSpringIndex-1, SpringCount, RecordCount, Springs, Records, Cache);
-
-          Springs[LocalSpringIndex] := Damaged;
-          Result := Result + InternalAnalyze(LocalRecordIndex, LocalSpringIndex-1, SpringCount, RecordCount, Springs, Records, Cache);
-
-          Springs[LocalSpringIndex] := Unkown;
-
+          Result := InternalAnalyze(Damaged, LocalRecordIndex, LocalSpringIndex, SpringCount, MaxSpringCount, RecordCount, MaxRecordCount, Springs, Records, Cache);
+          Result := Result + InternalAnalyze(Operational, LocalRecordIndex, LocalSpringIndex, SpringCount, MaxSpringCount, RecordCount, MaxRecordCount, Springs, Records, Cache);
           Exit;
         end;
-      end;
 
+        Inc(LocalSpringIndex);
+
+        if LocalSpringIndex = MaxSpringCount then // Out of springs, Valid if all records are used
+          Exit(ifThen(LocalRecordIndex = MaxRecordCount, 1, 0));
+
+        LocalSpring := Springs[LocalSpringIndex mod SpringCount];
+      end;
     finally
       if key <> 0 then
-        Cache.AddOrSetValue(Key, Result);
+        Cache.Add(Key, Result);
     end;
   end;
 
 var
   s: string;
   split: TStringDynArray;
-  i, j, SpringCount, RecordCount, FoldedSpringCount, FoldedRecordCount, LocalIndex: integer;
+  i, MaxSpringCount, MaxRecordCount, FoldedSpringCount, FoldedRecordCount: integer;
   LineResult: Int64;
   Springs: TSprings;
   Records: TRecords;
@@ -1254,16 +1279,8 @@ begin
     FoldedSpringCount := Length(split[0]);
     FoldedRecordCount := Length(split)-1;
 
-    SpringCount := FoldedSpringCount;
-    RecordCount := FoldedRecordCount;
-    if UnfoldRecords then
-    begin
-      SpringCount := FoldedSpringCount*5 + 4;
-      RecordCount := FoldedRecordCount*5
-    end;
-
-    SetLength(Springs, SpringCount);
-    SetLength(Records, RecordCount);
+    SetLength(Springs, FoldedSpringCount + ifthen(UnfoldRecords, 1, 0));
+    SetLength(Records, FoldedRecordCount);
 
     for i := 1 to FoldedSpringCount do
       Springs[i-1] := SpringState(Pos(split[0][i], '?.#')) ;
@@ -1271,30 +1288,17 @@ begin
     for i := 1 to FoldedRecordCount do
       Records[i-1] := Split[i].ToInteger;
 
+    MaxSpringCount := FoldedSpringCount;
+    MaxRecordCount := FoldedRecordCount;
     if UnfoldRecords then
     begin
-      LocalIndex := FoldedSpringCount;
-
-      for i := 1 to 4 do
-      begin
-        Springs[LocalIndex] := Unkown;
-        Inc(LocalIndex);
-        for j := 0 to FoldedSpringCount -1 do
-          Springs[LocalIndex + j] := Springs[j];
-        inc(LocalIndex, FoldedSpringCount);
-      end;
-
-      LocalIndex := FoldedRecordCount;
-
-      for i := 1 to 4 do
-      begin
-        for j := 0 to FoldedRecordCount-1 do
-          Records[LocalIndex + j] := Records[j];
-        Inc(LocalIndex, FoldedRecordCount);
-      end;
+      MaxSpringCount := FoldedSpringCount*5 + 4;
+      MaxRecordCount := FoldedRecordCount*5;
+      Springs[FoldedSpringCount] := Unkown;
+      Inc(FoldedSpringCount);
     end;
 
-    LineResult := InternalAnalyze(0, -1, SpringCount, RecordCount, Springs, Records, Cache);
+    LineResult := InternalAnalyze(Springs[0], 0, 0, FoldedSpringCount, MaxSpringCount, FoldedRecordCount, MaxRecordCount, Springs, Records, Cache);
 
     Inc(Result, LineResult);
   end;
@@ -1542,7 +1546,7 @@ begin
   Result := CalculateLoad(True) ;
 end;
 {$ENDREGION}
-{$REGION 'TAdventOfCodeDay15}
+{$REGION 'TAdventOfCodeDay15'}
 function TAdventOfCodeDay15.Hash(aValue: string): Integer;
 var i: Integer;
 begin
@@ -1617,6 +1621,223 @@ begin
   Boxes.Free;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay16'}
+procedure TAdventOfCodeDay16.BeforeSolve;
+var
+  x,y: integer;
+begin
+  MaxX := Length(FInput[0])-1;
+  MaxY := FInput.Count -1;
+
+  SetLength(Map, MaxX+1);
+  for x := 0 to MaxX do
+    SetLength(Map[x], MaxY+1);
+
+  for y := 0 to MaxY do
+    for x := 0 to MaxX do
+      Map[x][y] := TReflector(Pos(FInput[Y][X+1], './\-|'));
+end;
+
+const
+  ReflectorDate: array[TReflector] of array[TAOCDirection] of TAOCDirections = (
+  {refNone} ([North],[East],[South],[West]),
+  {RefPos}  ([East],[North],[West],[South]),
+  {Refneg}  ([West],[South],[East],[North]),
+  {RevHorz} ([East, West],[East],[East, West],[West]),
+  {RevVert} ([North],[North, South],[South],[North, South]));
+
+function TAdventOfCodeDay16.FireBeam(aFrom: TPosition; InitialDirection: TAOCDirection): integer;
+var
+  Energyzed: array of array of TAOCDirections;
+
+  procedure InternalFireBeam(aCurrent: TPosition; aDirection: TAOCDirection);
+  var
+    Reflector: TReflector;
+    newDirection: TAOCDirection;
+  begin
+    if not InRange(aCurrent.x, 0, maxX) or not InRange(aCurrent.y, 0, maxY) then
+      Exit;
+
+    Reflector := Map[aCurrent.x, aCurrent.y];
+
+    if Energyzed[aCurrent.x, aCurrent.y] = [] then
+      Inc(Result);
+    if aDirection in Energyzed[aCurrent.x, aCurrent.y] then
+      Exit;
+    Energyzed[aCurrent.x, aCurrent.y] := Energyzed[aCurrent.x, aCurrent.y] + [aDirection];
+
+    for newDirection in ReflectorDate[Reflector][aDirection] do
+      InternalFireBeam(aCurrent.ApplyDirection(newDirection), newDirection)
+  end;
+
+var
+  x: integer;
+begin
+  Result := 0;
+
+  SetLength(Energyzed, MaxX+1);
+  for x := 0 to MaxX do
+    SetLength(Energyzed[x], MaxY+1);
+
+  InternalFireBeam(aFrom, InitialDirection);
+end;
+
+function TAdventOfCodeDay16.SolveA: Variant;
+begin
+  Result := FireBeam(TPosition.Create(0,0), East);
+end;
+
+function TAdventOfCodeDay16.SolveB: Variant;
+var
+  x,y: integer;
+  res: Integer;
+begin
+  Result := 0;
+
+  for y := 0 to FInput.Count-1 do
+  begin
+    res := FireBeam(TPosition.Create(0,y), TAOCDirection.East);
+    Result := Max(Result, res);
+
+    res := FireBeam(TPosition.Create(MaxX,y), TAOCDirection.West);
+    Result := Max(Result, res);
+  end;
+
+  for x := 0 to Length(FInput[0])-1 do
+  begin
+    res := FireBeam(TPosition.Create(x,0), TAOCDirection.South);
+    Result := Max(Result, res);
+
+    res := FireBeam(TPosition.Create(x, MaxY), TAOCDirection.North);
+    Result := Max(Result, res);
+  end
+end;
+{$ENDREGION}
+{$REGION 'TAdventOfCodeDay17'}
+type
+  TCrucibleNode = record
+    Position: TPosition;
+    CurrentDir: TAOCDirection;
+    HeatLoss,
+    PredictedHeatLoss: Integer;
+
+    Class function Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss, aPredictedHeatLoss: Integer): TCrucibleNode; static;
+  end;
+
+class function TCrucibleNode.Create(aPosition: TPosition; aCurrentDir: TAOCDirection; aHeatLoss, aPredictedHeatLoss: Integer): TCrucibleNode;
+begin
+  Result.Position := aPosition;
+  Result.CurrentDir := aCurrentDir;
+  Result.HeatLoss := aHeatLoss;
+  Result.PredictedHeatLoss := aPredictedHeatLoss;
+end;
+
+procedure TAdventOfCodeDay17.BeforeSolve;
+var
+  x,y: Integer;
+begin
+  MaxX := Length(FInput[0])-1;
+  MaxY := FInput.Count -1;
+
+  SetLength(Map, MaxX+1);
+  for x := 0 to MaxX do
+    SetLength(Map[x], MaxY+1);
+
+  for y := 0 to MaxY do
+    for x := 0 to MaxX do
+      Map[x][y] := StrToInt(FInput[Y][X+1]);
+end;
+
+function TAdventOfCodeDay17.MoveCrucible(UseUltaCrucible: boolean): Integer;
+var
+  HeatLoss, i: integer;
+  Seen: TDictionary<integer, integer>;
+  Work: PriorityQueue<TCrucibleNode>;
+  CurrentWork, NewWork: TCrucibleNode;
+  Comparer: IComparer<TCrucibleNode>;
+  NextDir: TAOCDirection;
+  Init: Boolean;
+  NextPosition: TPosition;
+begin
+  Comparer := TComparer<TCrucibleNode>.Construct(
+      function(const Left, Right: TCrucibleNode): integer
+      begin
+        result := Sign(Left.HeatLoss - Right.HeatLoss);
+        if Result = 0 then
+          result := Sign(Left.PredictedHeatLoss - Right.PredictedHeatLoss);
+      end);
+
+  Work := PriorityQueue<TCrucibleNode>.Create(Comparer, Comparer);
+  Seen := TDictionary<Integer, Integer>.Create;
+
+  CurrentWork := TCrucibleNode.Create(TPosition.Create(0,0), East, -Map[0][0], 0);
+  Work.Enqueue(CurrentWork);
+
+  Result := 0;
+  Init := True;
+
+  while Work.Count > 0 do
+  begin
+    CurrentWork := Work.Dequeue;
+
+    i := (CurrentWork.Position.x shl 20) + (CurrentWork.Position.y shl 10) + Ord(CurrentWork.CurrentDir);
+    if Seen.ContainsKey(i) then
+        Continue;
+
+    Seen.Add(i, 0);
+
+    HeatLoss := Map[CurrentWork.Position.x][CurrentWork.Position.y];
+    if (CurrentWork.Position.y = MaxY) and (CurrentWork.Position.x = MaxX) then
+      Exit(CurrentWork.HeatLoss + HeatLoss);
+
+    for NextDir in [North, East, South, West] do
+    begin
+      if (not init) and (RotateDirection(NextDir, 2) = CurrentWork.CurrentDir) then
+        continue; // Dont backtrack
+
+      if (not init) and (NextDir = CurrentWork.CurrentDir) then
+        Continue; // Dont keep moving in the same direction
+
+      HeatLoss := 0;
+      for i := 1 to ifthen(UseUltaCrucible, 10, 3) do
+      begin
+        NextPosition := CurrentWork.Position.Clone.ApplyDirection(NextDir, i);
+
+        if not InRange(NextPosition.x, 0, MaxX) then
+          Break;
+
+        if not InRange(NextPosition.y, 0, MaxY) then
+          Break;
+
+        HeatLoss := HeatLoss + Map[NextPosition.x][NextPosition.y];
+
+        if UseUltaCrucible and (i < 4) then
+          Continue;
+
+        NewWork := TCrucibleNode.Create(
+          NextPosition,
+          NextDir,
+          CurrentWork.HeatLoss + HeatLoss,
+          CurrentWork.HeatLoss + HeatLoss + MaxX - NextPosition.x + MaxY - NextPosition.y);
+
+        Work.Enqueue(NewWork);
+      end;
+    end;
+
+    Init := False;
+  end;
+end;
+
+function TAdventOfCodeDay17.SolveA: Variant;
+begin
+  Result := MoveCrucible(False);
+end;
+
+function TAdventOfCodeDay17.SolveB: Variant;
+begin
+  Result := MoveCrucible(True);
+end;
+{$ENDREGION}
 
 
 {$REGION 'TAdventOfCodeDay'}
@@ -1655,6 +1876,8 @@ initialization
 RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
-  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15]);
+  TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
+  TAdventOfCodeDay16,TAdventOfCodeDay17
+   ]);
 
 end.
