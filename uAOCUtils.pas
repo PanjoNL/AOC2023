@@ -35,7 +35,7 @@ type
     function AddDelta(const aX, aY: int64): TPosition;
     function Equals(Const Other: TPosition): Boolean;
     function Clone: TPosition;
-    function ApplyDirection(Const aDirection: TAOCDirection; aDelta: integer = 1): TPosition;
+    function ApplyDirection(Const aDirection: TAOCDirection; aDelta: Int64 = 1): TPosition;
   private
     function SetIt(const aX, aY: int64): TPosition;
   end;
@@ -226,7 +226,7 @@ begin
   Result.SetIt(aX, aY);
 end;
 
-function TPosition.ApplyDirection(Const aDirection: TAOCDirection; aDelta: integer = 1): TPosition;
+function TPosition.ApplyDirection(Const aDirection: TAOCDirection; aDelta: Int64 = 1): TPosition;
 begin
   case aDirection of
     North: AddDelta(0, -aDelta);

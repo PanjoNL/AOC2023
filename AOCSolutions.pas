@@ -206,7 +206,13 @@ type
     function SolveB: Variant; override;
   end;
 
-
+  TAdventOfCodeDay18 = class(TAdventOfCode)
+  private
+    function FindLavaLagoon(const UseHexValue: Boolean): Int64;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -1839,7 +1845,67 @@ begin
   Result := MoveCrucible(True);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay18'}
+function TAdventOfCodeDay18.FindLavaLagoon(const UseHexValue: Boolean): Int64;
+var
+  s: string;
+  CurrentX, CurrentY, PrevX, PrevY, Distance, Area, Border: Int64;
+  PosAt, Rotation: Integer;
+begin
+//https://arachnoid.com/area_irregular_polygon/index.html
+//https://en.wikipedia.org/wiki/Pick%27s_theorem
 
+  CurrentX := 0;
+  CurrentY := 0;
+  PrevX := 0;
+  PrevY := 0;
+  Area := 0;
+  Border := 0;
+
+  for s in FInput do
+  begin
+    PosAt := Pos('#', s);
+
+    if UseHexValue then
+    begin
+      Distance := StrToInt64('$'+Copy(s, PosAt +1, Length(s) -PosAt -2));
+      Rotation := StrToInt('$'+Copy(s, PosAt +6, 1));
+    end
+    else
+    begin
+      Distance := StrToInt(Copy(s, 3, PosAt -5));
+      Rotation := Pos(s[1], 'RDLU') - 1;
+    end;
+
+    case Rotation of
+      0: Inc(CurrentX, Distance);
+      1: Inc(CurrentY, Distance);
+      2: Dec(CurrentX, Distance);
+      3: Dec(CurrentY, Distance);
+    end;
+
+    Inc(Area, CurrentX * PrevY);
+    Dec(Area, CurrentY * PrevX);
+
+    PrevX := CurrentX;
+    PrevY := CurrentY;
+
+    Inc(Border, Distance);
+  end;
+
+  Result := (abs(Area) shr 1) + (Border shr 1) + 1;
+end;
+
+function TAdventOfCodeDay18.SolveA: Variant;
+begin
+  Result := FindLavaLagoon(False);
+end;
+
+function TAdventOfCodeDay18.SolveB: Variant;
+begin
+  Result := FindLavaLagoon(True);
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1878,7 +1944,7 @@ RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
   TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
-  TAdventOfCodeDay16,TAdventOfCodeDay17
+  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18
    ]);
 
 end.
