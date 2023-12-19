@@ -1777,9 +1777,8 @@ end;
 function TAdventOfCodeDay17.MoveCrucible(UseUltaCrucible: boolean): Integer;
 var
   HeatLoss, i, key, GridSize: integer;
-  Work: PriorityQueue<TCrucibleNode>;
+  Work: PriorityQueue<Integer, TCrucibleNode>;
   CurrentWork, NewWork: TCrucibleNode;
-  Comparer: IComparer<TCrucibleNode>;
   NextDir: TAOCDirection;
   Init: Boolean;
   NextPosition: TPosition;
@@ -1787,18 +1786,12 @@ var
 begin
   GridSize := MaxX * MaxY;
 
-  Comparer := TComparer<TCrucibleNode>.Construct(
-    function(const Left, Right: TCrucibleNode): integer
-    begin
-      result := Sign(Left.HeatLoss - Right.HeatLoss);
-    end);
-
-  Work := PriorityQueue<TCrucibleNode>.Create(Comparer, Comparer);
+  Work := PriorityQueue<Integer, TCrucibleNode>.Create();
 
   SetLength(Seen, GridSize * 2);
 
   CurrentWork := TCrucibleNode.Create(TPosition.Create(0,0), East, 0);
-  Work.Enqueue(CurrentWork);
+  Work.Enqueue(0, CurrentWork);
 
   Result := 0;
   Init := True;
@@ -1811,13 +1804,13 @@ begin
       Exit(CurrentWork.HeatLoss);
 
     key := (CurrentWork.Position.x * MaxX + CurrentWork.Position.y) + (Ord(CurrentWork.CurrentDir) and 1) * GridSize;
-    if Seen[key] <> CurrentWork.HeatLoss then
+    if Seen[key] < CurrentWork.HeatLoss then
       Continue;
 
     for NextDir in [North, East, South, West] do
     begin
       if (not Init) and ((Ord(NextDir) and 1) = (Ord(CurrentWork.CurrentDir) and 1)) then
-        Continue;
+        Continue; // Dont move back or in the same direction
 
       HeatLoss := 0;
       for i := 1 to ifthen(UseUltaCrucible, 10, 3) do
@@ -1839,14 +1832,11 @@ begin
 
         key := (NewWork.Position.x * MaxX + NewWork.Position.y) + (Ord(NewWork.CurrentDir) and 1) * GridSize;
 
-        if Seen[Key] = 0 then
-          Seen[Key] := NewWork.HeatLoss // new entry
-        else if Seen[Key] <= NewWork.HeatLoss then
-          Continue // Found a path with less heatloss
-        else
-          Seen[Key] := NewWork.HeatLoss; // Mark Path as best path until now
+        if (Seen[Key] <> 0) and (Seen[Key] <= NewWork.HeatLoss) then
+          continue;
 
-        Work.Enqueue(NewWork);
+        Seen[Key] := NewWork.HeatLoss;
+        Work.Enqueue(NewWork.HeatLoss, NewWork);
       end;
     end;
 
@@ -2021,13 +2011,13 @@ begin
   begin
     Rule := Rules[i];
 
-    if Rules[i].CategorieIdxToCheck < 0 then
+    if Rule.CategorieIdxToCheck < 0 then
     begin
-      Result := Result + AnalyzeWorkFlow(Rules[i].NextWorkFlow, MinValues, MaxValues);
+      Result := Result + AnalyzeWorkFlow(Rule.NextWorkFlow, MinValues, MaxValues);
       Exit; // Last rule
     end;
 
-    if Rules[i].CheckBigger then
+    if Rule.CheckBigger then
     begin
       NewValues := CopyValues(MinValues);
       NewValues[Rule.CategorieIdxToCheck] := Max(MinValues[Rule.CategorieIdxToCheck], Rule.CheckValue + 1);
