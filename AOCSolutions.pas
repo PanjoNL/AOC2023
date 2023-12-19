@@ -214,6 +214,28 @@ type
     function SolveB: Variant; override;
   end;
 
+  TCategorieValues = array[0..3] of Int64;
+  TRule = Record
+    CategorieIdxToCheck: Integer;
+    CheckBigger: Boolean;
+    CheckValue: Int64;
+    NextWorkFlow: String;
+    class function CreateFromString(const aValue: string): TRule; static;
+  End;
+
+  TAdventOfCodeDay19 = class(TAdventOfCode)
+  private
+    Workflows: TDictionary<String,TList<TRule>>;
+
+    function AnalyzeWorkFlow(WorkFlowName: string; MinValues, MaxValues: TCategorieValues): Int64;
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
   protected
@@ -1794,11 +1816,8 @@ begin
 
     for NextDir in [North, East, South, West] do
     begin
-      if (not init) and (RotateDirection(NextDir, 2) = CurrentWork.CurrentDir) then
-        continue; // Dont backtrack
-
-      if (not init) and (NextDir = CurrentWork.CurrentDir) then
-        Continue; // Dont keep moving in the same direction
+      if (not Init) and ((Ord(NextDir) and 1) = (Ord(CurrentWork.CurrentDir) and 1)) then
+        Continue;
 
       HeatLoss := 0;
       for i := 1 to ifthen(UseUltaCrucible, 10, 3) do
@@ -1906,6 +1925,166 @@ begin
   Result := FindLavaLagoon(True);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay19'}
+
+class function TRule.CreateFromString(const aValue: string): TRule;
+var
+  Split: TStringDynArray;
+begin
+  Split := SplitString(aValue, '<>:');
+
+  if Length(Split) = 1 then
+  begin
+    Result.CategorieIdxToCheck := -1;
+    Result.CheckBigger := True;
+    Result.CheckValue := -1;
+    Result.NextWorkFlow := aValue;
+  end
+  else
+  begin
+    Result.CategorieIdxToCheck := Pos(aValue[1], 'xmas')-1;
+    Result.CheckBigger := aValue[2] = '>';
+    Result.CheckValue := Split[1].ToInt64;
+    Result.NextWorkFlow := Split[2];
+  end;
+end;
+
+procedure TAdventOfCodeDay19.BeforeSolve;
+var
+  s: String;
+  split: TStringDynArray;
+  i, j: Integer;
+  Rules: TList<TRule>;
+begin
+  Workflows := TObjectDictionary<String,TList<TRule>>.Create([doOwnsValues]);
+
+  i := 0;
+  while i <= FInput.Count-1 do
+  begin
+    s := FInput[i];
+    if s = '' then
+      Break;
+
+    split := SplitString(s, '{},');
+
+    Rules := TList<TRule>.Create;
+    Workflows.Add(Split[0], Rules);
+
+    for j := 1 to Length(Split)-1 do
+      if Split[j] <> '' then
+        Rules.Add(TRule.CreateFromString(Split[j]));
+
+    Inc(i);
+  end;
+end;
+
+procedure TAdventOfCodeDay19.AfterSolve;
+begin
+  Workflows.Free;
+end;
+
+function TAdventOfCodeDay19.AnalyzeWorkFlow(WorkFlowName: string; MinValues, MaxValues: TCategorieValues): Int64;
+
+  function CopyValues(aSoure: TCategorieValues): TCategorieValues;
+  var
+    i: Integer;
+  begin
+    for i := 0 to 3 do
+      Result[i] := aSoure[i];
+  end;
+
+var
+  Rules: TList<TRule>;
+  Rule: TRule;
+  NewValues: TCategorieValues;
+  i: Integer;
+begin
+  Result := 0;
+
+  for i := 0 to 3 do
+    if MaxValues[i] < MinValues[i] then
+      Exit; // Invalid state;
+
+  if WorkFlowName = 'R' then
+    Exit; // Rejected
+
+  if WorkFlowName = 'A' then
+  begin
+    Result := 1;
+    for i := 0 to 3 do
+      Result := Result * (MaxValues[i] - MinValues[i] + 1);
+    exit; // Accepted, Return count
+  end;
+
+  Rules := Workflows[WorkFlowName];
+  for i := 0 to Rules.Count -1 do
+  begin
+    Rule := Rules[i];
+
+    if Rules[i].CategorieIdxToCheck < 0 then
+    begin
+      Result := Result + AnalyzeWorkFlow(Rules[i].NextWorkFlow, MinValues, MaxValues);
+      Exit; // Last rule
+    end;
+
+    if Rules[i].CheckBigger then
+    begin
+      NewValues := CopyValues(MinValues);
+      NewValues[Rule.CategorieIdxToCheck] := Max(MinValues[Rule.CategorieIdxToCheck], Rule.CheckValue + 1);
+      Result := Result + AnalyzeWorkFlow(Rule.NextWorkFlow, NewValues, MaxValues);
+      MaxValues[Rule.CategorieIdxToCheck] := Min(MaxValues[Rule.CategorieIdxToCheck], Rule.CheckValue);
+    end
+    else
+    begin
+      NewValues := CopyValues(MaxValues);
+      NewValues[Rule.CategorieIdxToCheck] := Min(MaxValues[Rule.CategorieIdxToCheck], Rule.CheckValue - 1);
+      Result := Result + AnalyzeWorkFlow(Rule.NextWorkFlow, MinValues, NewValues);
+      MinValues[Rule.CategorieIdxToCheck] := Max(MinValues[Rule.CategorieIdxToCheck], Rule.CheckValue);
+    end
+  end;
+end;
+
+function TAdventOfCodeDay19.SolveA: Variant;
+var
+  split: TStringDynArray;
+  i, j, Idx: Integer;
+  Val, Res: Int64;
+  MinValues, MaxValues: TCategorieValues;
+begin
+  for i := WorkFlows.Count + 1 to FInput.Count-1 do
+  begin
+    split := SplitString(FInput[i], '{=,}');
+    j := 1;
+    Res := 0;
+    while j < 9 do
+    begin
+      Idx := Pos(split[j], 'xmas')-1;
+      Val := Split[j+1].ToInt64;
+      MinValues[Idx] := Val;
+      MaxValues[Idx] := Val;
+      Inc(Res, Val);
+      Inc(j, 2);
+    end;
+
+    if AnalyzeWorkFlow('in', MinValues, MaxValues) = 1 then
+      Inc(Result, Res);
+  end;
+end;
+
+function TAdventOfCodeDay19.SolveB: Variant;
+var
+  i: integer;
+  MinValues, MaxValues: TCategorieValues;
+begin
+  for i := 0 to 3 do
+  begin
+    MinValues[i] := 1;
+    MaxValues[i] := 4000;
+  end;
+
+  Result := AnalyzeWorkFlow('in', MinValues, MaxValues);
+end;
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -1944,7 +2123,7 @@ RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
   TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
-  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18
+  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19
    ]);
 
 end.
