@@ -125,8 +125,7 @@ type
     function SolveB: Variant; override;
   end;
 
-  type
-    PipeSegment = (None =1, Start =2, Vertical =3, Horizontal =4, NE =5, NW =6, SW =7 , SE =8);
+  PipeSegment = (None =1, Start =2, Vertical =3, Horizontal =4, NE =5, NW =6, SW =7 , SE =8);
     
   TAdventOfCodeDay10 = class(TAdventOfCode)
   private
@@ -235,6 +234,39 @@ type
     function SolveB: Variant; override;
   end;
 
+  TSignal = record
+    Reciever: string;
+    Sender: string;
+    Value: Boolean;
+    class function Create(aReciever, aSender: string; aValue: boolean): TSignal; static;
+  end;
+
+  TSignalBus = TQueue<TSignal>;
+  TModule = class
+  private 
+    FModuleName: string;
+  protected
+    procedure SendSignals(aValue: Boolean; aBus: TSignalBus);
+  public
+    ConnectedModules: TList<string>;
+    DependsOn: TList<string>;
+        
+    constructor Create(aValue: string);
+    destructor Destroy; override;
+    
+    procedure RecieveHello(aFrom: string); virtual;
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); virtual; abstract;
+    
+    property ModuleName: string read FModuleName;
+  end;
+  
+  TAdventOfCodeDay20 = class(TAdventOfCode)
+  private
+    function CreateModules: TDictionary<string,TModule>;
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
   TAdventOfCodeDay = class(TAdventOfCode)
   private
@@ -2075,6 +2107,310 @@ begin
   Result := AnalyzeWorkFlow('in', MinValues, MaxValues);
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay20'}
+type
+  TBroadCaster = class(TModule)
+  public
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); override;
+  end;
+
+  TButton = class(TModule)
+  private 
+    FButtonPushCount: integer;
+  public
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); override;
+    procedure PushButton(aBus: TSignalBus);
+
+    constructor Create(aValue: string);
+    
+    property ButtonPushCount: integer read FButtonPushCount;  
+  end;
+
+  TReciever = class(TModule)
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); override;
+  end;
+
+  TFlipFlop = class(TModule)
+  private
+    currentState: Boolean;
+  public
+    constructor Create(aValue: string);
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); override;
+  end;
+
+  TConjunction = class(TModule)
+  private
+    RecievedPulses: TDictionary<string, boolean>;
+  public
+    constructor Create(aValue: string);
+    destructor Destroy; override;
+    
+    procedure RecieveHello(aFrom: string); override;
+    procedure RecieveSignal(aSingal: TSignal; aBus: TSignalBus); override;
+  end;
+  
+{ TSignal }
+  
+class function TSignal.Create(aReciever, aSender: string; aValue: boolean): TSignal;
+begin
+  Result.Reciever := aReciever;
+  Result.Sender := aSender;
+  Result.Value := aValue;
+end;
+
+{ TModule }
+
+constructor TModule.Create(aValue: string);
+var
+  split: TStringDynArray;
+  s: string;
+begin
+  Split := SplitString(aValue, '->');
+  Self.FModuleName := Trim(split[0]);
+
+  ConnectedModules := TList<String>.Create;
+  DependsOn := TList<string>.Create;
+  if Length(split) > 2 then
+  begin
+    Split := SplitString(Split[2], ',');
+    for s in split do
+      if s <> '' then
+        ConnectedModules.Add(Trim(s));
+  end;
+end;
+
+destructor TModule.Destroy;
+begin
+  ConnectedModules.Free;
+  DependsOn.Free;
+  inherited;
+end;
+
+procedure TModule.RecieveHello(aFrom: string);
+begin
+  DependsOn.Add(aFrom);
+end;
+
+procedure TModule.SendSignals(aValue: Boolean; aBus: TQueue<TSignal>);
+var 
+  s: string;
+begin
+  for s in ConnectedModules do
+    aBus.Enqueue(TSignal.Create(s, ModuleName, aValue));
+end;
+
+{ TFlipFlop }
+
+constructor TFlipFlop.Create(aValue: string);
+begin
+  currentState := False;
+  inherited;
+end;
+
+procedure TFlipFlop.RecieveSignal(aSingal: TSignal; aBus: TQueue<TSignal>);
+begin
+  if aSingal.Value = false then
+  begin
+    currentState := not currentState;
+    SendSignals(CurrentState, aBus);
+  end;
+end;
+
+{ TConjunction }
+
+constructor TConjunction.Create(aValue: string);
+begin
+  RecievedPulses := TDictionary<string,Boolean>.Create();
+  inherited
+end;
+
+destructor TConjunction.Destroy;
+begin
+  RecievedPulses.Free;
+  inherited;
+end;
+
+procedure TConjunction.RecieveHello(aFrom: string);
+begin
+  inherited;
+  RecievedPulses.Add(aFrom, False);
+end;
+
+procedure TConjunction.RecieveSignal(aSingal: TSignal; aBus: TQueue<TSignal>);
+var 
+  AllHigh, Val: Boolean;
+begin
+  RecievedPulses[aSingal.Sender] := aSingal.Value;
+
+  AllHigh := True;
+  for val in RecievedPulses.Values do
+    if not val then
+      AllHigh := False;
+
+  if AllHigh then
+    SendSignals(False, aBus)
+  else
+    SendSignals(True, aBus);
+end;
+
+{ TBroadCaster }
+
+procedure TBroadCaster.RecieveSignal(aSingal: TSignal; aBus: TQueue<TSignal>);
+begin
+  SendSignals(aSingal.Value, aBus);
+end;
+
+{ TButton }
+
+constructor TButton.Create(aValue: string);
+begin
+  inherited; 
+  FButtonPushCount := 0; 
+end;
+
+procedure TButton.PushButton(aBus: TSignalBus);
+begin
+  Inc(FButtonPushCount);
+  SendSignals(False, aBus);
+end;
+
+procedure TButton.RecieveSignal(aSingal: TSignal; aBus: TQueue<TSignal>);
+begin
+  // Nothing
+end;
+
+{ TReciever }
+
+procedure TReciever.RecieveSignal(aSingal: TSignal; aBus: TSignalBus);
+begin
+  // Nothing
+end;
+
+function TAdventOfCodeDay20.CreateModules: TDictionary<string,TModule>;
+var
+  s: String;
+  Module: TModule;
+  Button: TButton;
+  Reciever: TReciever;
+  Modules: TDictionary<string, TModule>;
+begin
+  Modules := TObjectDictionary<string, TModule>.Create([doOwnsValues]);
+
+  for s in FInput do
+  begin
+    Module := nil;
+    if s[1] = 'b' then
+      Module := TBroadCaster.Create(s)
+    else if s[1] = '%' then
+      Module := TFlipFlop.Create(RightStr(s, Length(s)-1))
+    else if s[1] = '&' then
+      Module := TConjunction.Create(RightStr(s, Length(s)-1));
+      
+    Modules.Add(Module.ModuleName, Module);
+  end;
+
+  for Module in Modules.Values do
+    for s in Module.ConnectedModules do
+    begin  
+      if Modules.ContainsKey(s) then      
+        Modules[s].RecieveHello(Module.ModuleName)
+      else
+      begin
+        Reciever := TReciever.Create(s);
+        Modules.Add(Reciever.ModuleName, Reciever);
+        Reciever.RecieveHello(Module.ModuleName);
+      end;
+    end;
+    
+  Button := TButton.Create('button -> broadcaster');
+  Modules.Add(Button.ModuleName, Button);
+  Result := Modules;
+end;
+
+function TAdventOfCodeDay20.SolveA: Variant;
+var
+  Modules: TDictionary<string,TModule>;
+  Module: TModule;
+  Bus: TSignalBus;
+  Signal: TSignal;
+  PulsCountLow, PulsCountHigh: Integer;
+  Button: TButton;
+begin
+  Bus := TSignalBus.Create;
+  Modules := CreateModules;
+  Button := Modules['button'] as TButton;
+
+  PulsCountLow := 0;
+  PulsCountHigh := 0;
+        
+  Button.PushButton(Bus);
+  while Bus.Count > 0 do
+  begin
+    Signal := Bus.Dequeue;
+
+    if Signal.Value then
+      Inc(PulsCountHigh)
+    else
+      Inc(PulsCountLow);
+
+    if Modules.TryGetValue(signal.Reciever, Module) then
+      Module.RecieveSignal(Signal, bus);
+
+    if (Bus.Count = 0) and (Button.ButtonPushCount < 1000) then
+      Button.PushButton(Bus);
+  end;
+
+  Result := PulsCountHigh * PulsCountLow;
+
+  Bus.Free;
+  Modules.Free;
+end;
+
+function TAdventOfCodeDay20.SolveB: Variant;
+var
+  i: Integer;
+  Reciever, FinalModule: TModule;
+  Modules: TDictionary<string,TModule>;
+  Bus: TQueue<TSignal>;
+  Signal: TSignal;
+  Button: TButton;
+  SignalsToCheck: TAOCDictionary<string,integer>;
+begin
+  Modules := CreateModules;
+  Bus := TSignalBus.Create; 
+  Button := Modules['button'] as TButton;
+  Reciever := Modules['rx'];
+  FinalModule := Modules[Reciever.DependsOn.First];
+  SignalsToCheck := TAOCDictionary<string,integer>.Create;
+
+  Button.PushButton(Bus);
+  while true do
+  begin
+    Signal := Bus.Dequeue;
+
+    if (Signal.Value) and (Signal.Reciever = FinalModule.ModuleName) then
+    begin
+      SignalsToCheck.AddOrIgnoreValue(Signal.Sender, Button.ButtonPushCount);
+      if SignalsToCheck.Count = FinalModule.DependsOn.Count then
+        Break;
+    end;
+
+    Modules[Signal.Reciever].RecieveSignal(signal, bus);
+
+    if Bus.count = 0 then
+      Button.PushButton(bus);
+  end;
+
+  Result := 1;
+  for i  in SignalsToCheck.Values do
+    Result := LCM(Result, i);
+
+  Bus.Free;
+  Modules.Free;
+  SignalsToCheck.Free;
+end;
+{$ENDREGION}
+
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -2113,7 +2449,7 @@ RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
   TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
-  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19
+  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19,TAdventOfCodeDay20
    ]);
 
 end.
