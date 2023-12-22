@@ -289,9 +289,10 @@ type
     FPosition1,
     FPosition2: TPosition3;
     FId: integer;
+    FOnGroundLevel: Boolean;
 
     FIsSupporting,
-    FSupportedBy: TList<Integer>;
+    FIsSupportedBy: TDictionary<Integer, TBrick>;
   public
     Constructor Create(aPosition1, aPosition2: TPosition3; aId: Integer);
     destructor Destroy; override;
@@ -300,6 +301,14 @@ type
     function MaxPos: TPosition3;
 
     procedure FallDown;
+    procedure AddSupportingBrick(aBrick: TBrick);
+    procedure AddSupportedByBrick(aBrick: TBrick);
+    function WouldFallDown(aFallenBrickIds: TDictionary<Integer,TBrick>): Boolean;
+
+    property Id: Integer read FId;
+    property IsSupporting: TDictionary<Integer, TBrick> read FIsSupporting;
+    property IsSupportedBy: TDictionary<Integer, TBrick> read FIsSupportedBy;
+    property OnGroundLevel: Boolean read FOnGroundLevel write FOnGroundLevel;
   end;
 
   TAdventOfCodeDay22 = class(TAdventOfCode)
@@ -2504,9 +2513,9 @@ end;
 function TAdventOfCodeDay21.CountSteps(aX, aY, aStepsLeft: Integer): Int64;
 var
   Work: TQueue<GardenPosition>;
+  Seen: TDictionary<Int64,Boolean>;
   Current: GardenPosition;
   NextDirection: TAOCDirection;
-  Seen: TDictionary<Int64,Boolean>;
 begin
   Result := 0;
   Work := TQueue<GardenPosition>.Create;
@@ -2584,20 +2593,32 @@ begin
 end;
 {$ENDREGION}
 {$REGION 'TAdventOfCodeDay22'}
+procedure TBrick.AddSupportedByBrick(aBrick: TBrick);
+begin
+  if not FIsSupportedBy.ContainsKey(aBrick.Id) then
+    FIsSupportedBy.AddOrSetValue(aBrick.Id, aBrick);
+end;
+
+procedure TBrick.AddSupportingBrick(aBrick: TBrick);
+begin
+  if not FIsSupporting.ContainsKey(aBrick.Id) then
+    FIsSupporting.AddOrSetValue(aBrick.Id, aBrick);
+end;
+
 constructor TBrick.Create(aPosition1, aPosition2: TPosition3; aId: Integer);
 begin
   FPosition1 := aPosition1;
   FPosition2 := aPosition2;
   FId := aId;
 
-  FIsSupporting := TList<Integer>.Create;
-  FSupportedBy  := TList<Integer>.Create;
+  FIsSupporting := TDictionary<Integer, TBrick>.Create;
+  FIsSupportedBy  := TDictionary<Integer, TBrick>.Create;
 end;
 
 destructor TBrick.Destroy;
 begin
   FIsSupporting.Free;
-  FSupportedBy.Free;
+  FIsSupportedBy.Free;
 end;
 
 procedure TBrick.FallDown;
@@ -2616,22 +2637,33 @@ begin
   Result := TPosition3.Min(FPosition1, FPosition2)
 end;
 
+function TBrick.WouldFallDown(aFallenBrickIds: TDictionary<Integer, TBrick>): Boolean;
+var
+  SupportingBrickId: Integer;
+begin
+  if MinPos.Z = 0 then
+    Exit(False); // On ground level
+
+  Result := True;
+  for SupportingBrickId in IsSupportedBy.Keys do
+    if not aFallenBrickIds.ContainsKey(SupportingBrickId) then
+      Exit(False);
+end;
+
 procedure TAdventOfCodeDay22.BeforeSolve;
 var
-  settled: TDictionary<TPosition3,Integer>;
+  settled: TDictionary<TPosition3,TBrick>;
   s: String;
   split: TStringDynArray;
-  i, x, y, z, OtherId: Integer;
-
+  i, x, y: Integer;
   Work: PriorityQueue<Integer, TBrick>;
-  Brick: TBrick;
+  Brick, SettledBrick: TBrick;
   CanFall: Boolean;
   minPos, maxPos: TPosition3;
-
 begin
   Bricks := TObjectDictionary<Integer,TBrick>.Create([doOwnsValues]);
   Work := PriorityQueue<Integer, TBrick>.Create;;
-  settled := TDictionary<TPosition3,Integer>.Create;
+  settled := TDictionary<TPosition3,TBrick>.Create;
 
   i := 0;
   for s in FInput do
@@ -2674,22 +2706,16 @@ begin
       end
     end;
 
-    if minPos.Z = 0 then
-      Brick.FSupportedBy.Add(0);// Ground
-
     for x := minPos.x to maxPos.x do
       for y := minPos.y to maxPos.y do
       begin
-        if settled.TryGetValue(TPosition3.Create(x,y,minPos.Z-1), OtherId) then
+        if settled.TryGetValue(TPosition3.Create(x,y,minPos.Z-1), SettledBrick) then
         begin
-          if not Bricks[OtherId].FIsSupporting.Contains(Brick.FId) then
-            Bricks[OtherId].FIsSupporting.Add(Brick.FId);
-
-          if not Brick.FSupportedBy.Contains(OtherId) then
-            Brick.FSupportedBy.Add(OtherId);
+          SettledBrick.AddSupportingBrick(Brick);
+          Brick.AddSupportedByBrick(SettledBrick);
         end;
 
-        settled.Add(TPosition3.Create(x,y,maxPos.Z), Brick.FId);
+        settled.Add(TPosition3.Create(x,y,maxPos.Z), Brick);
       end;
   end;
 
@@ -2704,20 +2730,23 @@ end;
 
 function TAdventOfCodeDay22.SolveA: Variant;
 var
-  Id1, Id2: Integer;
+  Brick, SupportingBrick: TBrick;
   CanRemove: Boolean;
+  FallenBricks: TDictionary<Integer,TBrick>;
 begin
-  for Id1 in Bricks.Keys do
+  FallenBricks := TDictionary<Integer,TBrick>.Create(1);
+  for Brick in Bricks.Values do
   begin
+    FallenBricks.Clear;
+    FallenBricks.Add(Brick.Id, Brick);
+
     CanRemove := True;
-    for Id2 in Bricks[Id1].FIsSupporting do
-    begin
-      if Bricks[Id2].FSupportedBy.Count = 1 then
+    for SupportingBrick in Brick.IsSupporting.Values do
+      if SupportingBrick.WouldFallDown(FallenBricks) then
       begin
         CanRemove := False;
         Break;
       end;
-    end;
 
     if CanRemove then
       inc(Result);
@@ -2726,52 +2755,44 @@ end;
 
 function TAdventOfCodeDay22.SolveB: Variant;
 var
-  InitialBlock, CurrentId, Id: Integer;
-  CanFall: Boolean;
-  IdsToCalc: TList<Integer>;
-  RemovedBlocks: TDictionary<Integer, Boolean>;
+  InitialBrick, CurrentBrick, SupportingBrick: TBrick;
+  BricksToCalc: TQueue<TBrick>;
+  FallenBricks: TDictionary<Integer, TBrick>;
 begin
   Result := 0;
 
-  IdsToCalc := TList<Integer>.Create;
-  RemovedBlocks := TDictionary<Integer, Boolean>.Create;
+  BricksToCalc := TQueue<TBrick>.Create;
+  FallenBricks := TDictionary<Integer, TBrick>.Create;
 
-  for InitialBlock in Bricks.Keys do
+  for InitialBrick in Bricks.Values do
   begin
-    RemovedBlocks.Clear;
-    RemovedBlocks.Add(InitialBlock, true);
+    FallenBricks.Clear;
+    FallenBricks.Add(InitialBrick.Id, InitialBrick);
 
-    for Id in Bricks[InitialBlock].FIsSupporting do
-      if not IdsToCalc.Contains(Id) then
-        IdsToCalc.Add(Id);
+    for SupportingBrick in InitialBrick.IsSupporting.Values do
+      BricksToCalc.Enqueue(SupportingBrick);
 
-    while IdsToCalc.Count > 0 do
+    while BricksToCalc.Count > 0 do
     begin
-      CurrentId := IdsToCalc.ExtractAt(0);
+      CurrentBrick := BricksToCalc.Dequeue;
 
-      CanFall := True;
-      for Id in Bricks[CurrentId].FSupportedBy do
-        if not RemovedBlocks.ContainsKey(Id) then
-        begin
-          CanFall := False;
-          Break;
-        end;
-
-      if not CanFall then
+      if FallenBricks.ContainsKey(CurrentBrick.Id) then
         Continue;
 
-      RemovedBlocks.Add(CurrentId, True);
+      if not CurrentBrick.WouldFallDown(FallenBricks) then
+        Continue;
 
-      for Id in Bricks[CurrentId].FIsSupporting do
-        if not IdsToCalc.Contains(Id) then
-          IdsToCalc.Add(Id);
+      FallenBricks.Add(CurrentBrick.Id, CurrentBrick);
+
+      for SupportingBrick in CurrentBrick.IsSupporting.Values do
+        BricksToCalc.Enqueue(SupportingBrick);
     end;
 
-    Inc(Result, RemovedBlocks.Count - 1);
+    Inc(Result, FallenBricks.Count - 1);
   end;
 
-  RemovedBlocks.Free;
-  IdsToCalc.Free;
+  FallenBricks.Free;
+  BricksToCalc.Free;
 end;
 
 {$ENDREGION}
