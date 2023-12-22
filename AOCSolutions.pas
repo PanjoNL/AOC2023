@@ -271,6 +271,49 @@ type
     function SolveB: Variant; override;
   end;
 
+  TAdventOfCodeDay21 = class(TAdventOfCode)
+  private
+    Map: TDictionary<Int64, Boolean>;
+    MaxX, MaxY: Integer;
+    Start: TPosition;
+
+    function CountSteps(aX, aY, aStepsLeft: Integer): Int64;
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+  type TBrick = class
+    FPosition1,
+    FPosition2: TPosition3;
+    FId: integer;
+
+    FIsSupporting,
+    FSupportedBy: TList<Integer>;
+  public
+    Constructor Create(aPosition1, aPosition2: TPosition3; aId: Integer);
+    destructor Destroy; override;
+
+    function MinPos: TPosition3;
+    function MaxPos: TPosition3;
+
+    procedure FallDown;
+  end;
+
+  TAdventOfCodeDay22 = class(TAdventOfCode)
+  private
+    Bricks: TDictionary<Integer,TBrick>;
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+
+
   TAdventOfCodeDay = class(TAdventOfCode)
   private
   protected
@@ -1104,22 +1147,25 @@ var
   Segment: PipeSegment;
 begin
   PipeLoop := TDictionary<TPosition,PipeSegment>.Create;
+  try
+    Map := TDictionary<TPosition,PipeSegment>.Create;
 
-  Map := TDictionary<TPosition,PipeSegment>.Create;
+    for y := 0 to FInput.Count-1 do
+      for x := 1 to Length(FInput[0]) do
+      begin
+      Segment := PipeSegment(Pos(FInput[Y][X], '.S|-LJ7F'));
+        if Segment = PipeSegment.Start then
+          Start := TPosition.Create(X-1, Y);
 
-  for y := 0 to FInput.Count-1 do
-    for x := 1 to Length(FInput[0]) do
-    begin
-    Segment := PipeSegment(Pos(FInput[Y][X], '.S|-LJ7F'));
-      if Segment = PipeSegment.Start then
-        Start := TPosition.Create(X-1, Y);
+        Map.Add(TPosition.Create(X-1, Y), Segment);
+      end;
 
-      Map.Add(TPosition.Create(X-1, Y), Segment);
-    end;
-
-  for Segment in [Vertical, Horizontal, NE, NW, SW, SE] do
-    if FindLoop(Start.Clone, Segment) then
-      Exit;
+    for Segment in [Vertical, Horizontal, NE, NW, SW, SE] do
+      if FindLoop(Start.Clone, Segment) then
+        Exit;
+  finally
+    Map.Free
+  end
 end;
 
 procedure TAdventOfCodeDay10.AfterSolve;
@@ -2417,7 +2463,318 @@ begin
   SignalsToCheck.Free;
 end;
 {$ENDREGION}
+{$REGION 'TAdventOfCodeDay21'}
+type GardenPosition = record
+  Position: TPosition;
+  StepsLeft: Int64;
+  class function Create(aPosition: TPosition; StepsLeft: Int64): GardenPosition; Static;
+end;
 
+class function GardenPosition.Create(aPosition: TPosition; StepsLeft: Int64): GardenPosition;
+begin
+  Result.Position := aPosition;
+  Result.StepsLeft := StepsLeft;
+end;
+
+procedure TAdventOfCodeDay21.BeforeSolve;
+var
+  x,y: Integer;
+  Position: TPosition;
+begin
+  MaxX := Length(FInput[0])-1;
+  MaxY := FInput.Count -1;
+
+  Map := TDictionary<Int64,Boolean>.Create;
+
+  for y := 0 to MaxY do
+    for x := 0 to MaxX do
+    begin
+      Position := TPosition.Create(x, y);
+      Map.Add(Position.CacheKey, FInput[Y][X+1] = '#');
+      if FInput[Y][X+1] = 'S' then
+        Start := Position.Clone;
+    end;
+end;
+
+procedure TAdventOfCodeDay21.AfterSolve;
+begin
+  Map.Free;
+end;
+
+function TAdventOfCodeDay21.CountSteps(aX, aY, aStepsLeft: Integer): Int64;
+var
+  Work: TQueue<GardenPosition>;
+  Current: GardenPosition;
+  NextDirection: TAOCDirection;
+  Seen: TDictionary<Int64,Boolean>;
+begin
+  Result := 0;
+  Work := TQueue<GardenPosition>.Create;
+  Work.Enqueue(GardenPosition.Create(TPosition.Create(aX, aY), aStepsLeft));
+
+  Seen := TDictionary<Int64,Boolean>.Create;
+
+  while Work.Count > 0 do
+  begin
+    Current := Work.Dequeue;
+
+    if Current.StepsLeft < 0 then
+      Continue;
+
+    if (not InRange(Current.Position.x, 0, MaxX)) or (not InRange(Current.Position.Y, 0, MaxY)) then
+      Continue; // Out of bounds
+
+    if Map[Current.Position.CacheKey] then
+      Continue; // aRock;
+
+    if Seen.ContainsKey(Current.Position.CacheKey) then
+      Continue; // Already processed
+
+    Seen.Add(Current.Position.CacheKey, True);
+
+    if not Odd(Current.StepsLeft) then
+      Inc(Result);
+
+    for NextDirection in [North, East, South, West] do
+      Work.Enqueue(GardenPosition.Create(Current.Position.Clone.ApplyDirection(NextDirection), Current.StepsLeft - 1));
+  end;
+
+  Work.Free;
+  Seen.Free;
+end;
+
+function TAdventOfCodeDay21.SolveA: Variant;
+begin
+  Result := CountSteps(Start.X, Start.Y, 64);
+end;
+
+function TAdventOfCodeDay21.SolveB: Variant;
+Const
+  TotalSteps: Int64 = 26501365;
+var
+  GardenBlocks, GardenLength, OddGardenSteps: Int64;
+begin
+  GardenLength := MaxX + 1;
+  GardenBlocks := Trunc((TotalSteps - Start.X) / GardenLength);
+  OddGardenSteps := GardenLength + Start.X -1; // -1 because it took one step to get in this block
+
+  Result :=
+  // Complete odd blocks
+    (GardenBlocks-1) * (GardenBlocks-1) * CountSteps(Start.X, Start.Y, 999) +
+  // Complete even blocks
+    GardenBlocks * GardenBlocks * CountSteps(Start.X, Start.Y, 1000) +
+
+  // Cuttoff Odd blocks allong the edge
+    (GardenBlocks-1) * CountSteps(0, 0, OddGardenSteps) +
+    (GardenBlocks-1) * CountSteps(MaxX, 0, OddGardenSteps) +
+    (GardenBlocks-1) * CountSteps(0, MaxY, OddGardenSteps) +
+    (GardenBlocks-1) * CountSteps(MaxX, MaxY, OddGardenSteps) +
+
+  // Cuttoff evens block allong the edge (only 64 steps, because it took one edge to get here)
+    GardenBlocks * CountSteps(0, 0, Start.X-1) +
+    GardenBlocks * CountSteps(MaxX ,0, Start.X-1) +
+    GardenBlocks * CountSteps(0, MaxY, Start.X-1) +
+    GardenBlocks * CountSteps(MaxX, MaxY, Start.X-1) +
+
+  // Four end-blocks extending from the center
+    CountSteps(start.x, MaxY, GardenLength-1) +
+    CountSteps(start.x, 0, GardenLength-1) +
+    CountSteps(MaxX, start.Y, GardenLength-1) +
+    CountSteps(0, start.y, GardenLength-1);
+end;
+{$ENDREGION}
+{$REGION 'TAdventOfCodeDay22'}
+constructor TBrick.Create(aPosition1, aPosition2: TPosition3; aId: Integer);
+begin
+  FPosition1 := aPosition1;
+  FPosition2 := aPosition2;
+  FId := aId;
+
+  FIsSupporting := TList<Integer>.Create;
+  FSupportedBy  := TList<Integer>.Create;
+end;
+
+destructor TBrick.Destroy;
+begin
+  FIsSupporting.Free;
+  FSupportedBy.Free;
+end;
+
+procedure TBrick.FallDown;
+begin
+  FPosition1.Z := FPosition1.Z -1;
+  FPosition2.Z := FPosition2.Z -1;
+end;
+
+function TBrick.MaxPos: TPosition3;
+begin
+  Result := TPosition3.Max(FPosition1, FPosition2)
+end;
+
+function TBrick.MinPos: TPosition3;
+begin
+  Result := TPosition3.Min(FPosition1, FPosition2)
+end;
+
+procedure TAdventOfCodeDay22.BeforeSolve;
+var
+  settled: TDictionary<TPosition3,Integer>;
+  s: String;
+  split: TStringDynArray;
+  i, x, y, z, OtherId: Integer;
+
+  Work: PriorityQueue<Integer, TBrick>;
+  Brick: TBrick;
+  CanFall: Boolean;
+  minPos, maxPos: TPosition3;
+
+begin
+  Bricks := TObjectDictionary<Integer,TBrick>.Create([doOwnsValues]);
+  Work := PriorityQueue<Integer, TBrick>.Create;;
+  settled := TDictionary<TPosition3,Integer>.Create;
+
+  i := 0;
+  for s in FInput do
+  begin
+    Inc(i);
+    split := SplitString(s, ',~');
+    Brick := TBrick.Create(
+      TPosition3.Create(split[0].ToInt64,split[1].ToInt64,split[2].ToInt64),
+      TPosition3.Create(split[3].ToInt64,split[4].ToInt64,split[5].ToInt64),
+      i);
+
+    Work.Enqueue(Brick.MinPos.Z, Brick);
+    Bricks.Add(i, Brick);
+  end;
+
+  while Work.Count > 0 do
+  begin
+    Brick := Work.Dequeue;
+    minPos := Brick.MinPos;
+    maxPos := Brick.MaxPos;
+
+    CanFall := minPos.z > 0;
+    while CanFall do
+    begin
+      CanFall := minPos.z > 0;
+      if CanFall then
+        for x := minPos.x to maxPos.x do
+          for y := minPos.y to maxPos.y do
+            if settled.ContainsKey(TPosition3.Create(X, Y, minPos.Z-1)) then
+            begin
+              CanFall := False;
+              break
+            end;
+
+      if CanFall then
+      begin
+        Brick.FallDown;
+        minPos := Brick.MinPos;
+        maxPos := Brick.MaxPos;
+      end
+    end;
+
+    if minPos.Z = 0 then
+      Brick.FSupportedBy.Add(0);// Ground
+
+    for x := minPos.x to maxPos.x do
+      for y := minPos.y to maxPos.y do
+      begin
+        if settled.TryGetValue(TPosition3.Create(x,y,minPos.Z-1), OtherId) then
+        begin
+          if not Bricks[OtherId].FIsSupporting.Contains(Brick.FId) then
+            Bricks[OtherId].FIsSupporting.Add(Brick.FId);
+
+          if not Brick.FSupportedBy.Contains(OtherId) then
+            Brick.FSupportedBy.Add(OtherId);
+        end;
+
+        settled.Add(TPosition3.Create(x,y,maxPos.Z), Brick.FId);
+      end;
+  end;
+
+  settled.Free;
+end;
+
+procedure TAdventOfCodeDay22.AfterSolve;
+begin
+  inherited;
+  Bricks.Free;
+end;
+
+function TAdventOfCodeDay22.SolveA: Variant;
+var
+  Id1, Id2: Integer;
+  CanRemove: Boolean;
+begin
+  for Id1 in Bricks.Keys do
+  begin
+    CanRemove := True;
+    for Id2 in Bricks[Id1].FIsSupporting do
+    begin
+      if Bricks[Id2].FSupportedBy.Count = 1 then
+      begin
+        CanRemove := False;
+        Break;
+      end;
+    end;
+
+    if CanRemove then
+      inc(Result);
+  end;
+end;
+
+function TAdventOfCodeDay22.SolveB: Variant;
+var
+  InitialBlock, CurrentId, Id: Integer;
+  CanFall: Boolean;
+  IdsToCalc: TList<Integer>;
+  RemovedBlocks: TDictionary<Integer, Boolean>;
+begin
+  Result := 0;
+
+  IdsToCalc := TList<Integer>.Create;
+  RemovedBlocks := TDictionary<Integer, Boolean>.Create;
+
+  for InitialBlock in Bricks.Keys do
+  begin
+    RemovedBlocks.Clear;
+    RemovedBlocks.Add(InitialBlock, true);
+
+    for Id in Bricks[InitialBlock].FIsSupporting do
+      if not IdsToCalc.Contains(Id) then
+        IdsToCalc.Add(Id);
+
+    while IdsToCalc.Count > 0 do
+    begin
+      CurrentId := IdsToCalc.ExtractAt(0);
+
+      CanFall := True;
+      for Id in Bricks[CurrentId].FSupportedBy do
+        if not RemovedBlocks.ContainsKey(Id) then
+        begin
+          CanFall := False;
+          Break;
+        end;
+
+      if not CanFall then
+        Continue;
+
+      RemovedBlocks.Add(CurrentId, True);
+
+      for Id in Bricks[CurrentId].FIsSupporting do
+        if not IdsToCalc.Contains(Id) then
+          IdsToCalc.Add(Id);
+    end;
+
+    Inc(Result, RemovedBlocks.Count - 1);
+  end;
+
+  RemovedBlocks.Free;
+  IdsToCalc.Free;
+end;
+
+{$ENDREGION}
 
 {$REGION 'TAdventOfCodeDay'}
 procedure TAdventOfCodeDay.BeforeSolve;
@@ -2456,7 +2813,7 @@ RegisterClasses([
   TAdventOfCodeDay1, TAdventOfCodeDay2, TAdventOfCodeDay3, TAdventOfCodeDay4, TAdventOfCodeDay5,
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
   TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
-  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19,TAdventOfCodeDay20
-   ]);
+  TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19,TAdventOfCodeDay20,
+  TAdventOfCodeDay21,TAdventOfCodeDay22 ]);
 
 end.

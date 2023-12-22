@@ -21,6 +21,7 @@ type AOCUtils = class
 end;
 
 type TAOCDictionary<TKey,TValue> = class(TDictionary<TKey,TValue>)
+
   public
     procedure AddOrIgnoreValue(const Key: TKey; const Value: TValue);
     constructor Create(const aOnValueNoify: TCollectionNotifyEvent<TValue>); overload;
@@ -36,6 +37,7 @@ type
     function Equals(Const Other: TPosition): Boolean;
     function Clone: TPosition;
     function ApplyDirection(Const aDirection: TAOCDirection; aDelta: Int64 = 1): TPosition;
+    function CacheKey: Int64;
   private
     function SetIt(const aX, aY: int64): TPosition;
   end;
@@ -213,6 +215,13 @@ end;
 function TPosition.Equals(Const Other: TPosition): Boolean;
 begin
   Result := (x = Other.x) and (y = Other.y);
+end;
+
+function TPosition.CacheKey: Int64;
+begin
+  if (x > MaxInt) or (y > MaxInt) then
+    raise Exception.Create('Index out of range');
+  Result := x shl 32 + y;
 end;
 
 function TPosition.Clone: TPosition;
