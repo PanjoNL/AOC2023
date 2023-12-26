@@ -321,10 +321,13 @@ type
     function SolveB: Variant; override;
   end;
 
-
-
-  TAdventOfCodeDay = class(TAdventOfCode)
+  TPathTile = (SlopeNorth, SLopeEast, SlopeSouth, SlopeWest, Wall, Path);
+  TAdventOfCodeDay23 = class(TAdventOfCode)
   private
+    Map: TDictionary<TPosition,TPathTile>;
+    StartPosition, StopPosition: TPosition;
+
+    function FindPath(Const CanClimbSlopes: Boolean): Integer;
   protected
     procedure BeforeSolve; override;
     procedure AfterSolve; override;
@@ -332,10 +335,28 @@ type
     function SolveB: Variant; override;
   end;
 
+  THailStone = record
+    Position, Velocity: TPosition3;
+    class function Create(aPosition, aVelocity: TPosition3): THailStone; static;
+  end;
 
-  const
-    DeltaX: Array[0..3] of integer = (1, -1, 0, 0);
-    DeltaY: Array[0..3] of integer = (0, 0, -1, 1);
+  TAdventOfCodeDay24 = class(TAdventOfCode)
+  private
+    HailStones: TList<THailStone>;
+    function GetIntersection(PositionX1, PositionY1, VelocityX1, VelocityY1, PositionX2, PositionY2, VelocityX2, VelocityY2: Int64; out Time1, Time2: Float64): Boolean;
+  protected
+    procedure BeforeSolve; override;
+    procedure AfterSolve; override;
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
+
+  TAdventOfCodeDay25 = class(TAdventOfCode)
+  private
+  protected
+    function SolveA: Variant; override;
+    function SolveB: Variant; override;
+  end;
 
 implementation
 
@@ -2796,33 +2817,553 @@ begin
 end;
 
 {$ENDREGION}
-
-{$REGION 'TAdventOfCodeDay'}
-procedure TAdventOfCodeDay.BeforeSolve;
+{$REGION 'TAdventOfCodeDay23'}
+procedure TAdventOfCodeDay23.BeforeSolve;
+var
+  x, y: Integer;
+  Position: TPosition;
+  PathTile: TPathTile;
 begin
-  inherited;
+  Map := TDictionary<TPosition,TPathTile>.Create;
 
+  for y := 0 to FInput.Count-1 do
+    for x := 1 to Length(FInput[0]) do
+    begin
+      PathTile := TPathTile(Pos(FInput[Y][X], '^>v<#.')-1);
+      Position := TPosition.Create(X-1, Y);
+
+      if (PathTile = TPathTile.Path) and (y = 0) then
+        StartPosition := Position.Clone;
+
+      if (PathTile = TPathTile.Path) and (y = FInput.Count-1) then
+        StopPosition := Position.Clone;
+
+      Map.Add(TPosition.Create(X-1, Y), PathTile);
+    end;
 end;
 
-procedure TAdventOfCodeDay.AfterSolve;
+procedure TAdventOfCodeDay23.AfterSolve;
 begin
-  inherited;
-
+  Map.Free;
 end;
 
-function TAdventOfCodeDay.SolveA: Variant;
+function TAdventOfCodeDay23.FindPath(const CanClimbSlopes: Boolean): Integer;
+var
+  PositionKeys: TDictionary<TPosition, Byte>;
+  SimpleMap: TDictionary<Byte,TDictionary<Byte, Integer>>;
+  StopId: Byte;
+
+  function PositionKey(aPosition: TPosition): Byte;
+  begin
+    if PositionKeys.TryGetValue(aPosition, Result) then
+      Exit;
+    Result := PositionKeys.Count;
+    PositionKeys.Add(aPosition, Result);
+  end;
+
+  function CanEnterPath(aPathTile: TPathTile; NextDirecetion: TAOCDirection): Boolean;
+  begin
+    if aPathTile = wall then
+      Exit(False);
+
+    if aPathTile = Path then
+      Exit(True);
+
+    if CanClimbSlopes then
+      Exit(True);
+
+    Result :=
+      ((aPathTile = SlopeNorth) and (NextDirecetion = North)) or
+      ((aPathTile = SlopeEast) and (NextDirecetion = East)) or
+      ((aPathTile = SlopeSouth) and (NextDirecetion = South)) or
+      ((aPathTile = SlopeWest) and (NextDirecetion = West));
+  end;
+
+  procedure BuildSimplifiedMap(From: Byte; CurrentPos: TPosition; aPrevDirection: TAOCDirection; StepsTaken: Integer);
+  var
+    NextDirections: TAocDirections;
+    NextDirecetion, PrevDirection, NextPrevDirection: TAOCDirection;
+    NextDirectionCount, PrevSteps: Integer;
+    NextPosition: TPosition;
+    NextPathTile: TPathTile;
+  begin
+    PrevDirection := aPrevDirection;
+
+    repeat
+      NextDirectionCount := 0;
+      NextDirections := [];
+      NextPrevDirection := North;
+
+      for NextDirecetion in [North, East, South, West] do
+      begin
+        if RotateDirection(NextDirecetion, 2) = PrevDirection then
+          Continue;
+
+        NextPosition := CurrentPos.Clone.ApplyDirection(NextDirecetion);
+        if not Map.TryGetValue(NextPosition, NextPathTile) then
+          Continue;
+
+        if CanEnterPath(NextPathTile, NextDirecetion) then
+        begin
+          Inc(NextDirectionCount);
+          Include(NextDirections, NextDirecetion);
+          NextPrevDirection := NextDirecetion;;
+        end;
+      end;
+
+      StepsTaken := StepsTaken + 1;
+      if NextDirectionCount = 1 then
+      begin
+        PrevDirection := NextPrevDirection;
+        CurrentPos := CurrentPos.ApplyDirection(PrevDirection);
+      end
+      else if NextDirectionCount > 1 then
+      begin
+        NextDirecetion := RotateDirection(PrevDirection, 2);
+        if CanEnterPath(Map[CurrentPos.Clone.ApplyDirection(NextDirecetion)], NextDirecetion) then
+           Include(NextDirections, NextDirecetion);
+      end;
+
+    until (NextDirectionCount <> 1);
+
+    SimpleMap[From].TryGetValue(PositionKey(CurrentPos), PrevSteps);
+    SimpleMap[From].AddOrSetValue(PositionKey(CurrentPos), Max(StepsTaken, PrevSteps));
+
+    if not SimpleMap.ContainsKey(PositionKey(CurrentPos)) then
+    begin
+      SimpleMap.Add(PositionKey(CurrentPos), TDictionary<Byte,Integer>.Create);
+      for NextDirecetion in NextDirections do
+        BuildSimplifiedMap(PositionKey(CurrentPos), CurrentPos.Clone.ApplyDirection(NextDirecetion), NextDirecetion, 0);
+    end;
+  end;
+
+  function _FindPath(CurrentPos: Byte; Seen: SetOfByte; StepsTaken: Integer): integer;
+  var
+    NextPosition: Byte;
+  begin
+    if CurrentPos = StopId then
+      Exit(StepsTaken);
+
+    Result := 0;
+    for NextPosition in SimpleMap[CurrentPos].Keys do
+    begin
+      if NextPosition in Seen then
+        Continue;
+
+      Include(Seen, NextPosition);
+      Result := Max(Result, _FindPath(NextPosition, Seen, StepsTaken + SimpleMap[CurrentPos][NextPosition]));
+      ExClude(Seen, NextPosition);
+    end;
+  end;
+
+begin
+  PositionKeys := TDictionary<TPosition, Byte>.Create;
+
+  SimpleMap := TDictionary<Byte,TDictionary<Byte, Integer>>.Create;
+  SimpleMap.Add(PositionKey(StartPosition), TDictionary<Byte, Integer>.Create);
+  StopId := PositionKey(StopPosition);
+  BuildSimplifiedMap(PositionKey(StartPosition), StartPosition, East, -1);
+
+  Result := _FindPath(PositionKey(StartPosition), [PositionKey(StartPosition)], 0);
+  SimpleMap.Free;
+  PositionKeys.Free;
+end;
+
+function TAdventOfCodeDay23.SolveA: Variant;
+begin
+  Result := FindPath(False);
+end;
+
+function TAdventOfCodeDay23.SolveB: Variant;
+begin
+  Result := FindPath(True);
+end;
+{$ENDREGION}
+{$REGION 'TAdventOfCodeDay24'}
+class function THailStone.Create(aPosition, aVelocity: TPosition3): THailStone;
+begin
+  Result.Position := aPosition;
+  Result.Velocity := aVelocity;
+end;
+
+procedure TAdventOfCodeDay24.BeforeSolve;
 var
   s: String;
-  split: TStringDynArray;
+  Split: TStringDynArray;
 begin
+  HailStones := TList<THailStone>.Create;
+
   for s in FInput do
   begin
-    split := SplitString(s, ',');
-    Writeln(s);
+    split := SplitString(s.Replace(' ', '', [rfReplaceAll]), '@,');
+    HailStones.Add(THailStone.Create(
+      TPosition3.Create(Split[0].ToInt64,Split[1].ToInt64, Split[2].ToInt64),
+      TPosition3.Create(Split[3].ToInt64,Split[4].ToInt64, Split[5].ToInt64)));
   end;
 end;
 
-function TAdventOfCodeDay.SolveB: Variant;
+procedure TAdventOfCodeDay24.AfterSolve;
+begin
+  HailStones.Free;
+end;
+
+function TAdventOfCodeDay24.GetIntersection(PositionX1, PositionY1, VelocityX1,
+  VelocityY1, PositionX2, PositionY2, VelocityX2, VelocityY2: Int64; out Time1,
+  Time2: Float64): Boolean;
+var
+  a, b, c, d, e, f: Int64;
+begin
+  // Modified from  https://codereview.stackexchange.com/questions/238711/solving-a-linear-system-with-two-variables
+
+  a := -VelocityX1;
+  b := VelocityX2;
+  c := PositionX1 - PositionX2;
+
+  d := -VelocityY1;
+  e := VelocityY2;
+  f := PositionY1 - PositionY2;
+
+  if ((a * e - b *d) = 0)  then
+    Exit(False);
+
+  Result := True;
+  Time2 := (a * f - c * d) / (a * e - b  *d);
+  Time1 := (c - (b * Time2)) / a;
+end;
+
+function TAdventOfCodeDay24.SolveA: Variant;
+Const
+  LowerBound: Int64 = 200000000000000;
+  HigherBound: Int64 = 400000000000000;
+var
+  i, j: Integer;
+  HailStoneOne, HailStoneTwo: THailStone;
+  TimeOne, TimeTwo, IntersectX, InterSectY: Float64;
+begin
+  result := 0;
+  for i := 0 to FInput.Count-1 do
+  begin
+    HailStoneOne := HailStones[i];
+
+    for j := i + 1 to FInput.Count-1 do
+    begin
+      HailStoneTwo := HailStones[j];
+
+      if not GetIntersection(HailStoneOne.Position.X, HailStoneOne.Position.Y, HailStoneOne.Velocity.X, HailStoneOne.Velocity.Y,
+                             HailStoneTwo.Position.X, HailStoneTwo.Position.Y, HailStoneTwo.Velocity.X, HailStoneTwo.Velocity.Y, TimeOne,TimeTwo ) then
+        Continue;
+
+      if (TimeOne < 0) then
+        Continue;
+
+      if (TimeTwo < 0) then
+        Continue;
+
+      IntersectX := HailStoneOne.Position.X + TimeOne * HailStoneOne.Velocity.X;
+      InterSectY := HailStoneOne.Position.Y + TimeOne * HailStoneOne.Velocity.Y;
+
+      if (IntersectX < LowerBound) or (IntersectX > HigherBound) then
+        Continue;
+
+      if (InterSectY < LowerBound) or (InterSectY > HigherBound) then
+        Continue;
+
+      Inc(Result);
+    end;
+  end;
+end;
+
+function TAdventOfCodeDay24.SolveB: Variant;
+
+  procedure _CheckVelocity(Difference, Velocity: Int64; PossibleVelocitys: TList<Int64>);
+  var
+    Factors: TList<Int64>;
+    i: Int64;
+  begin
+    Factors := TList<Int64>.Create;
+
+    for i := -1000 to 1000 do
+      if (i + Velocity <> 0) and (Difference mod (i + Velocity) = 0) then
+        Factors.Add(-i);
+
+    if PossibleVelocitys.Count = 0 then
+      PossibleVelocitys.AddRange(Factors)
+    else
+      for i := PossibleVelocitys.Count -1 downto 0 do
+        if not Factors.Contains(PossibleVelocitys[i]) then
+          PossibleVelocitys.Delete(i);
+
+    Factors.Free;
+  end;
+
+  procedure _AddVelocitysIfEmpty(PossibleVelocitys: TList<Int64>);
+  var
+    I: Int64;
+  begin
+    if PossibleVelocitys.Count > 0 then
+      Exit;
+
+    for i := -500 to 500 do
+      PossibleVelocitys.Add(i);
+  end;
+
+var
+  VelocityX, VelocityY, VelocityZ: TList<Int64>;
+  i, j: Integer;
+  HailStoneOne, HailStoneTwo, HailStone: THailStone;
+  VelX, VelY, VelZ: Int64;
+  x, y, z, TimeOne, TimeTwo: Float64;
+  AllHit: Boolean;
+begin
+  VelocityX := TList<Int64>.Create;
+  VelocityY := TList<Int64>.Create;
+  VelocityZ := TList<Int64>.Create;
+  try
+
+    for i := 0 to FInput.Count-1 do
+    begin
+      HailStoneOne := HailStones[i];
+
+      for j := i + 1 to FInput.Count-1 do
+      begin
+        HailStoneTwo := HailStones[j];
+
+        if HailStoneOne.Velocity.X = HailStoneTwo.Velocity.X then
+          _CheckVelocity(HailStoneOne.Position.X - HailStoneTwo.Position.X, HailStoneOne.Velocity.X, VelocityX);
+        if HailStoneOne.Velocity.Y = HailStoneTwo.Velocity.Y then
+          _CheckVelocity(HailStoneOne.Position.Y - HailStoneTwo.Position.Y, HailStoneOne.Velocity.Y, VelocityY);
+        if HailStoneOne.Velocity.Z = HailStoneTwo.Velocity.Z then
+          _CheckVelocity(HailStoneOne.Position.Z - HailStoneTwo.Position.Z, HailStoneOne.Velocity.Z, VelocityZ);
+      end;
+    end;
+
+    _AddVelocitysIfEmpty(VelocityX);
+    _AddVelocitysIfEmpty(VelocityY);
+    _AddVelocitysIfEmpty(VelocityZ);
+
+    HailStoneOne := HailStones[0];
+    HailStoneTwo := HailStones[1];
+
+    for VelX in VelocityX do
+      for VelY in VelocityY do
+        for VelZ in VelocityZ do
+        begin
+          if not GetIntersection(
+            HailStoneOne.Position.X, HailStoneOne.Position.Y, HailStoneOne.Velocity.X - VelX, HailStoneOne.Velocity.Y - VelY,
+            HailStoneTwo.Position.X, HailStoneTwo.Position.Y, HailStoneTwo.Velocity.X - VelX, HailStoneTwo.Velocity.Y - VelY,
+            TimeOne, TimeTwo) then
+            Continue;
+
+          x := HailStoneOne.Position.X + (HailStoneOne.Velocity.X - VelX) * TimeOne;
+          y := HailStoneOne.Position.Y + (HailStoneOne.Velocity.Y - VelY) * TimeOne;
+          z := HailStoneOne.Position.Z + (HailStoneOne.Velocity.Z - VelZ) * TimeOne;
+
+          AllHit := (VelocityX.Count = 1) and (VelocityY.Count = 1) and (VelocityZ.Count = 1);
+          if not AllHit then // Only needed for the example
+          begin
+            AllHit := True;
+            for HailStone in HailStones do
+            begin
+              if (HailStone.Velocity.x - velX) = 0 then
+                Continue;
+
+              TimeOne := Abs((HailStone.Position.x - x) / (HailStone.Velocity.x - velX));
+
+              AllHit :=
+                ((HailStone.Position.X + HailStone.Velocity.x * TimeOne) = (X + VelX * TimeOne)) and
+                ((HailStone.Position.Y + HailStone.Velocity.Y * TimeOne) = (Y + VelY * TimeOne)) and
+                ((HailStone.Position.Z + HailStone.Velocity.Z * TimeOne) = (Z + VelZ * TimeOne));
+              if not AllHit then
+                Break;
+
+
+            end;
+          end;
+
+          if AllHit then
+          begin
+            Result := x + y + z;
+            Exit;
+          end;
+        end;
+  finally
+    VelocityX.Free;
+    VelocityY.Free;
+    VelocityZ.Free;
+  end;
+end;
+{$ENDREGION}
+{$REGION 'TAdventOfCodeDay25'}
+Type
+  WireInfo = record
+    ModuleTo: Int64;
+    WiresUsed: String;
+    StepsTaken: Integer;
+    class function Create(aModuleTo: Int64; aWiresUsed: String; aStepsTaken: Integer): WireInfo; Static;
+  end;
+
+class function WireInfo.Create(aModuleTo: Int64; aWiresUsed: String; aStepsTaken: Integer): WireInfo;
+begin
+  Result.ModuleTo := aModuleTo;
+  Result.WiresUsed := aWiresUsed;
+  Result.StepsTaken := aStepsTaken;
+end;
+
+function TAdventOfCodeDay25.SolveA: Variant;
+var
+  ModuleIds: TDictionary<string, Int64>;
+  Modules: TDictionary<Int64,TList<Int64>>;
+
+  function WireName(aWire1, aWire2: string): string;
+  begin
+    if aWire1 < aWire2 then
+      Result := aWire1 + aWire2
+    else
+      Result := aWire2 + aWire1;
+  end;
+
+  function ModuleId(Const aNodeName: String): Int64;
+  begin
+    if ModuleIds.TryGetValue(aNodeName, Result) then
+      Exit;
+    Result := ModuleIds.Count + 1;
+    ModuleIds.Add(aNodeName, Result);
+  end;
+
+  function CalcWireId(Module1, Module2: Int64): Int64;
+  begin
+    Result := (Max(Module1, Module2) shl 16) + Min(Module1, Module2);
+  end;
+
+  function CheckMap(aFrom: Int64; Disconected1, Disconected2, Disconected3: Int64; BuildMap: Boolean; WireUsage: TList<Int64>): Integer;
+  var
+    Work: TQueue<WireInfo>;
+    Seen: TDictionary<Integer,Boolean>;
+    Info: WireInfo;
+    s: String;
+    Split: TStringDynArray;
+    WireCount: TDictionary<Int64,Int64>;
+    WireCountPair: TPair<Int64,Int64>;
+    PrevCount, WireId, i: Int64;
+  begin
+    Work := TQueue<WireInfo>.Create;
+    Seen := TDictionary<Integer,Boolean>.Create;
+    WireCount := TDictionary<Int64,Int64>.Create;
+
+
+    Work.Enqueue(WireInfo.Create(aFrom, '', 0));
+
+    while Work.Count > 0 do
+    begin
+      Info := Work.Dequeue;
+
+      if Seen.ContainsKey(Info.ModuleTo) then
+        Continue;
+      Seen.Add(Info.ModuleTo, True);
+
+      if BuildMap then
+      begin
+        split := SplitString(Info.WiresUsed, '|');
+        for s in Split do
+        begin
+          if not TryStrToInt64(s, WireId) then
+            Continue;
+
+          WireCount.TryGetValue(WireId, PrevCount);
+          WireCount.AddOrSetValue(WireId, PrevCount + 1);
+        end;
+      end;
+
+      for i in Modules[Info.ModuleTo] do
+      begin
+        WireId := CalcWireId(Info.ModuleTo, i);
+        if (WireId <> Disconected1) and (WireId <> Disconected2) and (WireId <> Disconected3)   then
+          Work.Enqueue(WireInfo.Create(i, Info.WiresUsed + '|' + WireId.ToString, Info.StepsTaken + 1));
+      end
+    end;
+
+    if BuildMap then
+    begin
+      WireUsage.Clear;
+      for WireCountPair in WireCount do
+        WireUsage.Add((WireCountPair.Value shl 32) + WireCountPair.Key);
+      WireUsage.Sort;
+      WireUsage.Reverse;
+    end;
+
+    Result := 0;
+    if Seen.Count <> Modules.Count then
+      Result := Seen.Count * (Modules.Count - Seen.Count);
+
+    Seen.Free;
+    Work.Free;
+    WireCount.Free;
+  end;
+
+var
+  s: String;
+  split: TStringDynArray;
+  ModuleId0, ModuleIdI, x, y, z, i: Integer;
+  WireUsage1, WireUsage2, WireUsage3, Connected: TList<Int64>;
+begin
+  Modules := TObjectDictionary<Int64,TList<Int64>>.Create([doOwnsValues]);
+  ModuleIds := TDictionary<string, Int64>.Create;
+  WireUsage1 := TList<Int64>.Create;
+  WireUsage2 := TList<Int64>.Create;
+
+  try
+    for s in FInput do
+    begin
+      split := SplitString(s.Replace(':', '', []), ' ');
+      ModuleId0 := ModuleId(Split[0]);
+
+      for i := 1 to Length(split)-1 do
+      begin
+        ModuleIdI := ModuleId(Split[i]);
+
+        if not Modules.TryGetValue(ModuleId0, Connected) then
+        begin
+          Connected := TList<Int64>.Create;
+          Modules.Add(ModuleId0, Connected);
+        end;
+        Connected.Add(ModuleIdI);
+
+        if not Modules.TryGetValue(ModuleIdI, Connected) then
+        begin
+          Connected := TList<Int64>.Create;
+          Modules.Add(ModuleIdI, Connected);
+        end;
+        Connected.Add(ModuleId0);
+      end;
+    end;
+
+    CheckMap(1, 0, 0, 0, True, WireUsage1);
+    for x := 0 to Min(20, WireUsage1.Count-1) do
+    begin
+      CheckMap((WireUsage1.Last and maxInt) shr 16, WireUsage1[x] and MaxInt, 0, 0, True, WireUsage2);
+
+      for y := x + 1 to Min(20, WireUsage1.Count-1) do
+      begin
+        for z := y + 1 to Min(20, WireUsage1.Count-1) do
+        begin
+          Result := CheckMap((WireUsage1.Last and maxInt) shr 16, WireUsage1[x] and MaxInt, WireUsage2[y] and MaxInt, WireUsage2[z] and MaxInt, False, nil);
+          if Result > 0 then
+          begin
+            WriteLn('Done');
+            Exit;
+          end;
+        end;
+      end;
+    end;
+  finally
+    Modules.Free;
+    ModuleIds.Free;
+    WireUsage1.Free;
+    WireUsage2.Free;
+  end;
+end;
+
+function TAdventOfCodeDay25.SolveB: Variant;
 begin
   Result := null;
 end;
@@ -2835,6 +3376,6 @@ RegisterClasses([
   TAdventOfCodeDay6, TAdventOfCodeDay7, TAdventOfCodeDay8, TAdventOfCodeDay9, TAdventOfCodeDay10,
   TAdventOfCodeDay11,TAdventOfCodeDay12,TAdventOfCodeDay13,TAdventOfCodeDay14,TAdventOfCodeDay15,
   TAdventOfCodeDay16,TAdventOfCodeDay17,TAdventOfCodeDay18,TAdventOfCodeDay19,TAdventOfCodeDay20,
-  TAdventOfCodeDay21,TAdventOfCodeDay22 ]);
+  TAdventOfCodeDay21,TAdventOfCodeDay22,TAdventOfCodeDay23,TAdventOfCodeDay24,TAdventOfCodeDay25]);
 
 end.
